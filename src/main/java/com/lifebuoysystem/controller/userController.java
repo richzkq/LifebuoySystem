@@ -3,11 +3,9 @@ package com.lifebuoysystem.controller;
 import com.lifebuoysystem.common.result;
 import com.lifebuoysystem.entity.User;
 import com.lifebuoysystem.mapper.userMapper;
+import com.lifebuoysystem.utils.jwtUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * @author zkq
@@ -33,6 +31,13 @@ public class userController {
             return result.error("密码错误");
         }
 
-        return result.success(dbUser);
+        String token = jwtUtils.createToken(dbUser.getId(),dbUser.getUsername());
+        return result.success(token);
     }
+
+    @GetMapping("/info")
+    public result info(){
+        return result.success("登录成功.......");
+    }
+
 }
