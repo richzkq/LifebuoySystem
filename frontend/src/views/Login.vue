@@ -113,7 +113,7 @@ const handleLogin = async () => {
           ElMessage.success('登录成功')
           // 存储 Token
           localStorage.setItem('token', res.data)
-          router.push('/dashboard')
+          router.push('/detection')
         } else {
           ElMessage.error(res.msg || '登录失败')
         }
