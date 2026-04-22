@@ -7,3 +7,11 @@ spring:
     username: root
     password: Root@104104
     driver-class-name: com.mysql.cj.jdbc.Driver
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+
+# 图片临时保存目录（仅用于转发给前端，不入库）
+upload:
+  image-dir: /tmp/detection-images

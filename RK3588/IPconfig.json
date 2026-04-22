@@ -2,5 +2,5 @@
   "server_ip": "10.151.51.174",
   "server_port": 8080,
   "upload_path": "/device/upload",
-  "device_id": "lifebuoy001"
+  "device_id": "rocket001"
 }
