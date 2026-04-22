@@ -12,7 +12,7 @@
           <el-icon class="marine-icon"><Platform /></el-icon>
         </div>
         <h2 class="title">IoT Lifebuoy Safety System</h2>
-        <p class="subtitle">智能救生圈后台管理系统</p>
+        <!-- <p class="subtitle">智能救生圈后台管理系统</p> -->
       </div>
 
       <el-form 
@@ -144,7 +144,7 @@ const handleLogin = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  background: linear-gradient(135deg, #EAF6FF 0%, #D6F0FF 100%);
+  background: rgb(248, 251, 255);
   overflow: hidden;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
@@ -198,15 +198,18 @@ const handleLogin = async () => {
   z-index: 10;
   width: 420px;
   padding: 50px 40px;
-  background: rgba(255, 255, 255, 0.6);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.05) 100%);
   border-radius: 24px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-top: 1px solid rgba(255, 255, 255, 1);
+  border-left: 1px solid rgba(255, 255, 255, 1);
   box-shadow: 
-    10px 10px 30px rgba(77, 166, 255, 0.1),
-    -10px -10px 30px rgba(255, 255, 255, 0.8),
-    inset 2px 2px 5px rgba(255, 255, 255, 0.5);
+    0 20px 50px rgba(0, 0, 0, 0.08),
+    0 10px 30px rgba(77, 166, 255, 0.15),
+    -10px -10px 30px rgba(255, 255, 255, 1),
+    inset 2px 2px 6px rgba(255, 255, 255, 0.8);
 }
 
 .card-header {
@@ -241,11 +244,11 @@ const handleLogin = async () => {
   letter-spacing: 0.5px;
 }
 
-.subtitle {
+/* .subtitle {
   font-size: 14px;
   color: #64748B;
   margin: 0;
-}
+} */
 
 /* 拟态输入框包裹器 */
 .neumorphic-input-wrapper {
