@@ -30,7 +30,10 @@ public class webConfig implements WebMvcConfigurer {
         registry.addInterceptor(new jwtInterceptor())
                 .addPathPatterns("/**")
                 .excludePathPatterns(
-                        "/user/login"
+                        "/user/login",
+                        "/login/**",
+                        "/device/upload",
+                        "/ws/**"
                 );
     }
 }

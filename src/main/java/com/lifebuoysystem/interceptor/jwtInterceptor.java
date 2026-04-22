@@ -19,6 +19,14 @@ public class jwtInterceptor implements HandlerInterceptor {
 
         String token = request.getHeader("token");
 
+        String path = request.getRequestURI();
+        if (path.startsWith("/device/upload") ||
+                path.startsWith("/login") ||
+//                path.startsWith("/ws/**") ||
+                path.startsWith("/ws")) {
+            return true;
+        }
+
         if(token == null || token.isEmpty()){
             throw new RuntimeException("未登录");
         }

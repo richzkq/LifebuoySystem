@@ -144,7 +144,7 @@ import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 
 // ── WebSocket 连接配置 ──────────────────────────────────────
-const WS_URL = 'http://192.168.1.88:8080/ws'  // 对应 application.yml server.port
+const WS_URL = 'http://localhost:5173/ws'  // 对应 application.yml server.port
 
 const connected  = ref(false)
 const frame      = ref({ targets: [] })
