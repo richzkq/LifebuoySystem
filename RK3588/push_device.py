@@ -5,6 +5,7 @@ import os
 import json
 import logging
 import time
+import glob
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -51,6 +52,24 @@ RE_TARGET   = re.compile(
 )
 RE_IMAGE    = re.compile(r'保存结果图像:\s*(result_\d+\.jpg)')
 
+def cleanup_old_images():
+    """删除旧图片，防止异常情况下堆积"""
+    files = glob.glob("result_*.jpg")
+
+    # 只保留最新20张
+    if len(files) <= 20:
+        return
+
+    files.sort(key=os.path.getmtime)
+
+    old_files = files[:-20]
+
+    for f in old_files:
+        try:
+            os.remove(f)
+            logger.info("清理旧图片: %s", f)
+        except Exception as e:
+            logger.warning("清理失败 %s: %s", f, e)
 
 # ========= 上传函数 ==========
 def upload(data: dict | None) -> None:
@@ -81,8 +100,14 @@ def upload(data: dict | None) -> None:
             r = session.post(SERVER_URL, data=form, files=files, timeout=10)
             r.raise_for_status()   # 4xx/5xx 视为异常
 
-        logger.info("上传成功: 帧 %s，目标数 %s", data["frameNo"], data["detectCount"])
+            logger.info("上传成功: 帧 %s，目标数 %s", data["frameNo"], data["detectCount"])
 
+            # 上传成功后删除本地图片
+            try:
+                os.remove(img_path)
+                logger.info("已删除图片: %s", img_path)
+            except OSError as e:
+                logger.warning("删除图片失败: %s — %s", img_path, e)
     except requests.exceptions.Timeout:
         logger.error("上传超时: 帧 %s", data["frameNo"])
     except requests.exceptions.ConnectionError as e:
@@ -122,6 +147,7 @@ try:
         m = RE_FRAME.search(line)
         if m:
             upload(frame_data)
+            cleanup_old_images()
             frame_data = {
                 "frameNo":      int(m.group(1)),
                 "detectCount":  0,
