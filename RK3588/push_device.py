@@ -119,10 +119,16 @@ def upload(data: dict | None) -> None:
 
 
 # ========= 启动模型进程 ==========
-cmd = ["./rknn_yolov8_demo", "model/best_960.rknn", "0"]
+
+shell_cmd = """
+export LD_LIBRARY_PATH=/opt/glibc-2.38/lib:/usr/lib/aarch64-linux-gnu:/lib/aarch64-linux-gnu
+/opt/glibc-2.38/lib/ld-linux-aarch64.so.1 ./rknn_yolov8_demo model/yolov8.rknn
+"""
 
 process = subprocess.Popen(
-    cmd,
+    shell_cmd,
+    shell=True,
+    executable="/bin/bash",
     stdout=subprocess.PIPE,
     stderr=subprocess.STDOUT,
     text=True,
@@ -187,6 +193,7 @@ try:
 finally:
     # ========= 修复：上传最后一帧 ==========
     upload(frame_data)
+    cleanup_old_images()
 
     process.wait()
     exit_code = process.returncode
