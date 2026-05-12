@@ -16,3 +16,9 @@ spring:
 # 图片临时保存目录（仅用于转发给前端，不入库）
 upload:
   image-dir: /tmp/detection-images
+
+
+deepseek:
+  api:
+    key: sk-2cc6274b816f4e1b8ce732cb4454d643
+    url: https://api.deepseek.com/chat/completions
