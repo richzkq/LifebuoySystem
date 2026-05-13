@@ -148,14 +148,23 @@ def upload_worker():
                 upload_queue.task_done()
 
 
-# ========= 环境变量（清除干扰项） ==========
-env = os.environ.copy()
-env.pop("LD_PRELOAD",      None)
-env.pop("LD_LIBRARY_PATH", None)
-env.pop("LD_DEBUG",        None)
-env.pop("LD_AUDIT",        None)
-env.pop("LD_BIND_NOW",     None)
+# # ========= 环境变量（清除干扰项） ==========
+# env = os.environ.copy()
+# env.pop("LD_PRELOAD",      None)
+# env.pop("LD_LIBRARY_PATH", None)
+# env.pop("LD_DEBUG",        None)
+# env.pop("LD_AUDIT",        None)
+# env.pop("LD_BIND_NOW",     None)
 
+
+# ========= 环境变量 ==========
+env = os.environ.copy()
+# 仅对子进程使用 glibc 2.38
+env["LD_LIBRARY_PATH"] = (
+    "/opt/glibc-2.38/lib:"
+    "/usr/lib/aarch64-linux-gnu:"
+    "/lib/aarch64-linux-gnu"
+)
 
 # ========= stderr 读取线程 ==========
 def stderr_reader(proc: subprocess.Popen):
@@ -165,10 +174,14 @@ def stderr_reader(proc: subprocess.Popen):
             logger.error("[CHILD STDERR] %s", line)
 
 
-# ========= 启动 RKNN（直接用系统 ld.so，不走 /opt/glibc-2.38） ==========
+# ========= GLIBC Loader ==========
+GLIBC_LD = "/opt/glibc-2.38/lib/ld-linux-aarch64.so.1"
+
+# ========= 启动 RKNN ==========
 process = subprocess.Popen(
     [
-        DEMO_PATH,      # 直接执行，让系统 /lib/ld-linux-aarch64.so.1 负责加载
+        GLIBC_LD,
+        DEMO_PATH,
         MODEL_PATH,
     ],
     stdout=subprocess.PIPE,
