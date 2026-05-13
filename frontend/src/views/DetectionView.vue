@@ -44,7 +44,7 @@
 
           <video
             v-else
-            src="../assets/standby_video.mp4"
+            src="/video.mp4" 
             class="detection-video"
             autoplay
             loop
