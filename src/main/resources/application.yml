@@ -25,3 +25,7 @@ deepseek:
   api:
     key: sk-2cc6274b816f4e1b8ce732cb4454d643
     url: https://api.deepseek.com/chat/completions
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true

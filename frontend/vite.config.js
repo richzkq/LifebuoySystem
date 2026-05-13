@@ -17,6 +17,12 @@ export default defineConfig({
         changeOrigin: true
       },
 
+      '/alarm': {
+        target: 'http://10.151.51.174:8080',
+        changeOrigin: true,
+        secure: false
+      },
+
       '/uploads': {
         target: 'http://10.151.51.174:8080',
         changeOrigin: true,

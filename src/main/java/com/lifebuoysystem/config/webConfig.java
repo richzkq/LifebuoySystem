@@ -35,9 +35,8 @@ public class webConfig implements WebMvcConfigurer {
                         "/login/**",
                         "/device/upload",
                         "/ws/**",
-
-                        // 关键：放行 uploads
-                        "/uploads/**"
+                        "/uploads/**",
+                        "/api/alarm/**"
                 );
     }
 
