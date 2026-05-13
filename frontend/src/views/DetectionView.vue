@@ -21,7 +21,7 @@
         <div class="canvas-wrap" ref="wrapRef">
           <img
               v-if="frame.imageUrl"
-              :src="'http://localhost:8080' + frame.imageUrl"
+              :src="imageUrl(frame.imageUrl)"
               class="detection-img"
               ref="imgRef"
               @load="onImageLoad"
@@ -30,48 +30,6 @@
             <el-icon class="is-loading"><Loading /></el-icon>
             <p>等待视频流连接...</p>
           </div>
-
-          <svg
-              v-if="frame.imageUrl"
-              class="bbox-svg"
-              :viewBox="`0 0 ${naturalW} ${naturalH}`"
-              preserveAspectRatio="none"
-          >
-            <g v-for="t in frame.targets" :key="t.index">
-
-              <!-- 中心点 -->
-              <circle
-                  :cx="t.centerX"
-                  :cy="t.centerY"
-                  r="10"
-                  :fill="scoreColor(t.score)"
-                  stroke="#ffffff"
-                  stroke-width="3"
-              />
-
-              <!-- 标签背景 -->
-              <rect
-                  :x="t.centerX + 15"
-                  :y="t.centerY - 30"
-                  :width="labelWidth(t)"
-                  height="24"
-                  :fill="scoreColor(t.score)"
-                  rx="6"
-              />
-
-              <!-- 标签文字 -->
-              <text
-                  :x="t.centerX + 22"
-                  :y="t.centerY - 13"
-                  font-size="15"
-                  fill="white"
-                  font-weight="bold"
-              >
-                {{ t.label }} {{ (t.score * 100).toFixed(0) }}%
-              </text>
-
-            </g>
-          </svg>
         </div>
       </section>
 
@@ -92,31 +50,29 @@
           <div v-if="!frame.targets?.length" class="empty">无动态目标记录</div>
           <table v-else class="target-table">
             <thead>
-              <tr>
-                <th>ID</th>
-                <th>状态</th>
-                <th>置信度</th>
-                <th>位置</th>
-              </tr>
+            <tr>
+              <th>ID</th>
+              <th>状态</th>
+              <th>置信度</th>
+              <th>位置</th>
+            </tr>
             </thead>
             <tbody>
-              <tr v-for="t in frame.targets" :key="t.index">
-                <td>#{{ t.index }}</td>
-                <td>
+            <tr v-for="t in frame.targets" :key="t.index">
+              <td>#{{ t.index }}</td>
+              <td>
                   <span class="badge" :style="{ background: scoreColor(t.score) }">
                     {{ t.label }}
                   </span>
-                </td>
-                <td>
-                  <div class="score-bar-wrap">
-                    <div class="score-bar" :style="{ width: (t.score * 100) + '%', background: scoreColor(t.score) }" />
-                    <span>{{ (t.score * 100).toFixed(1) }}%</span>
-                  </div>
-                </td>
-                <td>
-                  ({{ t.centerX }}, {{ t.centerY }})
-                </td>
-              </tr>
+              </td>
+              <td>
+                <div class="score-bar-wrap">
+                  <div class="score-bar" :style="{ width: (t.score * 100) + '%', background: scoreColor(t.score) }" />
+                  <span>{{ (t.score * 100).toFixed(1) }}%</span>
+                </div>
+              </td>
+              <td>({{ t.centerX }}, {{ t.centerY }})</td>
+            </tr>
             </tbody>
           </table>
         </div>
@@ -150,16 +106,17 @@ import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { Loading } from '@element-plus/icons-vue'
 
-const WS_URL = 'http://localhost:8080/ws' 
+const WS_URL = `${window.location.protocol}//${window.location.host}/ws`
 
-const connected  = ref(false)
-const frame      = ref({ targets: [] })
-const naturalW   = ref(960)
-const naturalH   = ref(540)
-const imgRef     = ref(null)
-const history    = ref([])
-const frameCount = ref(0)
+const connected     = ref(false)
+const frame         = ref({ targets: [] })
+const naturalW      = ref(960)
+const naturalH      = ref(540)
+const imgRef        = ref(null)
+const history       = ref([])
+const frameCount    = ref(0)
 const totalDetected = ref(0)
+const imgTimestamp  = ref(Date.now())
 
 let stompClient = null
 
@@ -172,6 +129,7 @@ onMounted(() => {
       stompClient.subscribe('/topic/frames', (msg) => {
         const data = JSON.parse(msg.body)
         frame.value = data
+        imgTimestamp.value = Date.now()
         frameCount.value++
         totalDetected.value += data.detectCount ?? 0
         history.value.push({ frameNo: data.frameNo, count: data.detectCount ?? 0 })
@@ -185,20 +143,21 @@ onMounted(() => {
 
 onUnmounted(() => { stompClient?.deactivate() })
 
-function onImageLoad () {
+// 走 vite 代理转发到 8080，相对路径加时间戳防缓存
+function imageUrl(url) {
+  if (!url) return ''
+  return `${url}?t=${imgTimestamp.value}`
+}
+
+function onImageLoad() {
   naturalW.value = imgRef.value?.naturalWidth  || 960
   naturalH.value = imgRef.value?.naturalHeight || 540
 }
 
-function scoreColor (score) {
+function scoreColor(score) {
   if (score >= 0.7) return '#10B981'
   if (score >= 0.4) return '#FF5E00'
   return '#EF4444'
-}
-
-function labelWidth (t) {
-  const text = `${t.label} ${(t.score * 100).toFixed(0)}%`
-  return text.length * 10 + 10
 }
 
 const sparkRaw = computed(() => {
@@ -216,11 +175,9 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
 </script>
 
 <style scoped>
-/* ── 全局背景重塑 ── */
 .app {
   position: relative;
   min-height: 100vh;
-  /* 引入背景图 */
   background: url('../assets/backgroundImage.png') no-repeat center center;
   background-size: cover;
   color: #fff;
@@ -237,7 +194,6 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
   z-index: 0;
 }
 
-/* ── 液态玻璃通用类 ── */
 .glass-effect {
   background: rgba(255, 255, 255, 0.1) !important;
   backdrop-filter: blur(25px) saturate(150%);
@@ -252,7 +208,6 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
   border-radius: 12px;
 }
 
-/* ── Header ── */
 .header {
   position: relative;
   z-index: 2;
@@ -268,9 +223,9 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
   align-items: center;
   justify-content: space-between;
 }
-.title { 
-  font-size: 20px; 
-  font-weight: 800; 
+.title {
+  font-size: 20px;
+  font-weight: 800;
   letter-spacing: 1px;
   text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 }
@@ -279,7 +234,6 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
 .dot--on  { background: #10B981; box-shadow: 0 0 10px #10B981; }
 .dot--off { background: #EF4444; }
 
-/* ── Main Layout ── */
 .main {
   position: relative;
   z-index: 1;
@@ -297,9 +251,8 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
   padding: 20px;
 }
 .panel--image { flex: 2.5; display: flex; flex-direction: column; }
-.panel--info { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 340px; }
+.panel--info  { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 340px; }
 
-/* ── 视频流区域 ── */
 .canvas-wrap {
   position: relative;
   width: 100%;
@@ -312,8 +265,8 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
   justify-content: center;
 }
 .detection-img {
-  max-width: 100%;
-  max-height: 100%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 .placeholder {
@@ -322,7 +275,6 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
 }
 .placeholder p { margin-top: 10px; font-size: 14px; }
 
-/* ── 数据卡片 ── */
 .stat-cards { display: flex; gap: 15px; }
 .card {
   flex: 1;
@@ -331,14 +283,13 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
   transition: transform 0.3s;
 }
 .card:hover { transform: translateY(-5px); }
-.card__num { font-size: 32px; font-weight: 800; color: #FF5E00; }
+.card__num   { font-size: 32px; font-weight: 800; color: #FF5E00; }
 .card__label { font-size: 11px; color: rgba(255,255,255,0.5); text-transform: uppercase; margin-top: 5px; }
 
-/* ── 列表与表格 ── */
-.section-title { 
-  font-size: 12px; 
-  color: #FF5E00; 
-  font-weight: 700; 
+.section-title {
+  font-size: 12px;
+  color: #FF5E00;
+  font-weight: 700;
   margin-bottom: 15px;
   letter-spacing: 1px;
 }
@@ -353,12 +304,10 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
 .target-table td { padding: 12px 10px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 13px; }
 .badge { padding: 2px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; }
 
-/* ── 置信度条 ── */
 .score-bar-wrap { display: flex; align-items: center; gap: 8px; }
 .score-bar { height: 4px; border-radius: 2px; }
 .score-bar-wrap span { font-size: 10px; color: rgba(255,255,255,0.6); min-width: 35px; }
 
-/* ── 图表趋势 ── */
 .sparkline-wrap {
   padding: 15px;
   height: 80px;
@@ -367,16 +316,6 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
 }
 .sparkline { overflow: visible; }
 
-/* 滚动条美化 */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
-
-.bbox-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
 </style>

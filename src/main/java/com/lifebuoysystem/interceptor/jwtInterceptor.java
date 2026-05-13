@@ -22,7 +22,7 @@ public class jwtInterceptor implements HandlerInterceptor {
         String path = request.getRequestURI();
         if (path.startsWith("/device/upload") ||
                 path.startsWith("/login") ||
-//                path.startsWith("/ws/**") ||
+                path.startsWith("/uploads/") ||   // 放行静态图片资源
                 path.startsWith("/ws")) {
             return true;
         }
