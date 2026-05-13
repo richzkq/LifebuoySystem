@@ -14,6 +14,9 @@ import org.springframework.web.multipart.MultipartFile;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -51,15 +54,27 @@ public class UploadController {
                     targetsJson, new TypeReference<>() {});
 
             // ── 图片转 Base64（前端直接用 <img :src="..."> 渲染）──
-            String base64 = Base64.getEncoder().encodeToString(file.getBytes());
-            String imageBase64 = "data:image/jpeg;base64," + base64;
+//            String base64 = Base64.getEncoder().encodeToString(file.getBytes());
+//            String imageBase64 = "data:image/jpeg;base64," + base64;
+            String filename = deviceId + "_latest.jpg";
+
+            Path uploadPath = Paths.get("uploads");
+
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+
+            Path filePath = uploadPath.resolve(filename);
+
+            Files.write(filePath, file.getBytes());
 
             // ── 组装推送体 ─────────────────────────────────────────
             FramePayload payload = new FramePayload();
             payload.setDeviceId(deviceId);
             payload.setFrameNo(frameNo);
             payload.setDetectCount(detectCount);
-            payload.setImageBase64(imageBase64);
+//            payload.setImageBase64(imageBase64);
+            payload.setImageUrl("/uploads/" + filename);
             payload.setTargets(targets);
 
             // ── 向所有订阅 /topic/frames 的 Vue 客户端推送 ─────────

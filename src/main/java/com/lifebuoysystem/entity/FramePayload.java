@@ -16,6 +16,7 @@ public class FramePayload {
     private Integer frameNo;
     private Integer detectCount;
     private String  imageBase64;   // 图片以 Base64 字符串推送，Vue 直接渲染
+    private String imageUrl;
     private List<Target> targets;
 
     @Data

@@ -20,8 +20,8 @@
       <section class="panel panel--image glass-effect">
         <div class="canvas-wrap" ref="wrapRef">
           <img
-              v-if="frame.imageBase64"
-              :src="frame.imageBase64"
+              v-if="frame.imageUrl"
+              :src="'http://localhost:8080' + frame.imageUrl"
               class="detection-img"
               ref="imgRef"
               @load="onImageLoad"
@@ -32,7 +32,7 @@
           </div>
 
           <svg
-              v-if="frame.imageBase64"
+              v-if="frame.imageUrl"
               class="bbox-svg"
               :viewBox="`0 0 ${naturalW} ${naturalH}`"
               preserveAspectRatio="none"

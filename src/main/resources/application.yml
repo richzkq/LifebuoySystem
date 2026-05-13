@@ -12,6 +12,9 @@ spring:
     multipart:
       max-file-size: 20MB
       max-request-size: 25MB
+  web:
+    resources:
+      static-locations: file:uploads/
 
 # 图片临时保存目录（仅用于转发给前端，不入库）
 upload:
