@@ -20,9 +20,12 @@ public class FramePayload {
 
     @Data
     public static class Target {
+
         private Integer index;
-        private String  label;
-        private Float   score;
-        private Integer x1, y1, x2, y2;
+        private String label;
+        private Float score;
+        // 中心点
+        private Integer centerX;
+        private Integer centerY;
     }
 }

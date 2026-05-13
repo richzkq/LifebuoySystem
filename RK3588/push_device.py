@@ -42,19 +42,15 @@ session.mount("http://", adapter)
 session.mount("https://", adapter)
 
 # ========= 正则预编译 ==========
-RE_FRAME    = re.compile(r'=== 第\s*(\d+)\s*帧 ===')
-RE_COUNT_1  = re.compile(r'检测数量:\s*(\d+)')
-RE_COUNT_2  = re.compile(r'检测到\s*(\d+)\s*个目标')
-# [\w\u4e00-\u9fff]+ 同时兼容英文和中文标签
-RE_TARGET   = re.compile(
-    r'目标\[(\d+)\]:\s*([\w\u4e00-\u9fff]+)\s*\(([\d.]+)\)'
-    r'\s*位置:\s*\((\d+),(\d+)\)-\((\d+),(\d+)\)'
-)
-RE_IMAGE    = re.compile(r'保存结果图像:\s*(result_\d+\.jpg)')
+RE_FRAME = re.compile(r'=+\s*帧\s*(\d+)\s*=+')
+RE_CONF       = re.compile(r'人体置信度:\s*([\d.]+)')
+RE_CENTER     = re.compile(r'中心点:\s*\((\d+),\s*(\d+)\)')
+RE_IMAGE      = re.compile(r'已保存:\s*(frame_\d+\.jpg)')
+RE_DETECTED   = re.compile(r'检测到人:\s*(是|否)')
 
 def cleanup_old_images():
     """删除旧图片，防止异常情况下堆积"""
-    files = glob.glob("result_*.jpg")
+    files = glob.glob("frame_*.jpg")
 
     # 只保留最新20张
     if len(files) <= 20:
@@ -155,36 +151,56 @@ try:
             upload(frame_data)
             cleanup_old_images()
             frame_data = {
-                "frameNo":      int(m.group(1)),
-                "detectCount":  0,
-                "targets":      [],
-                "image":        "",
+                "frameNo": int(m.group(1)),
+                "detectCount": 0,
+                "targets": [],
+                "image": "",
             }
             continue
 
         if frame_data is None:
             continue
 
-        # 检测数量（兼容两种格式）
-        m = RE_COUNT_1.search(line) or RE_COUNT_2.search(line)
+        # 人体置信度
+        m = RE_CONF.search(line)
         if m:
-            frame_data["detectCount"] = int(m.group(1))
+            score = float(m.group(1))
+
+            target = {
+                "index": 0,
+                "label": "person",
+                "score": score,
+                "centerX": 0,
+                "centerY": 0,
+            }
+
+            frame_data["targets"] = [target]
             continue
 
-        # 检测目标
-        m = RE_TARGET.search(line)
-        if m:
-            frame_data["targets"].append({
-                "index": int(m.group(1)),
-                "label": m.group(2),
-                "score": float(m.group(3)),
-                "x1":    int(m.group(4)),
-                "y1":    int(m.group(5)),
-                "x2":    int(m.group(6)),
-                "y2":    int(m.group(7)),
-            })
+
+        # 中心点
+        m = RE_CENTER.search(line)
+        if m and frame_data["targets"]:
+            cx = int(m.group(1))
+            cy = int(m.group(2))
+
+            frame_data["targets"][0]["centerX"] = cx
+            frame_data["targets"][0]["centerY"] = cy
             continue
 
+
+        # 是否检测到人
+        m = RE_DETECTED.search(line)
+        if m:
+            detected = m.group(1)
+
+            if detected == "是":
+                frame_data["detectCount"] = 1
+            else:
+                frame_data["detectCount"] = 0
+                frame_data["targets"] = []
+
+            continue
         # 图片路径
         m = RE_IMAGE.search(line)
         if m:
