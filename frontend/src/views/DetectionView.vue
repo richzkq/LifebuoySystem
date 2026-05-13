@@ -38,24 +38,38 @@
               preserveAspectRatio="none"
           >
             <g v-for="t in frame.targets" :key="t.index">
-              <rect
-                  :x="t.x1" :y="t.y1"
-                  :width="t.x2 - t.x1" :height="t.y2 - t.y1"
-                  :stroke="scoreColor(t.score)"
-                  stroke-width="3"
-                  fill="rgba(255,255,255,0.05)"
-                  rx="4"
-              />
-              <rect
-                  :x="t.x1" :y="t.y1 - 22"
-                  :width="labelWidth(t)" height="22"
+
+              <!-- 中心点 -->
+              <circle
+                  :cx="t.centerX"
+                  :cy="t.centerY"
+                  r="10"
                   :fill="scoreColor(t.score)"
-                  rx="4"
+                  stroke="#ffffff"
+                  stroke-width="3"
               />
+
+              <!-- 标签背景 -->
+              <rect
+                  :x="t.centerX + 15"
+                  :y="t.centerY - 30"
+                  :width="labelWidth(t)"
+                  height="24"
+                  :fill="scoreColor(t.score)"
+                  rx="6"
+              />
+
+              <!-- 标签文字 -->
               <text
-                  :x="t.x1 + 5" :y="t.y1 - 6"
-                  font-size="16" fill="white" font-weight="bold"
-              >{{ t.label }} {{ (t.score * 100).toFixed(0) }}%</text>
+                  :x="t.centerX + 22"
+                  :y="t.centerY - 13"
+                  font-size="15"
+                  fill="white"
+                  font-weight="bold"
+              >
+                {{ t.label }} {{ (t.score * 100).toFixed(0) }}%
+              </text>
+
             </g>
           </svg>
         </div>
@@ -82,6 +96,7 @@
                 <th>ID</th>
                 <th>状态</th>
                 <th>置信度</th>
+                <th>位置</th>
               </tr>
             </thead>
             <tbody>
@@ -97,6 +112,9 @@
                     <div class="score-bar" :style="{ width: (t.score * 100) + '%', background: scoreColor(t.score) }" />
                     <span>{{ (t.score * 100).toFixed(1) }}%</span>
                   </div>
+                </td>
+                <td>
+                  ({{ t.centerX }}, {{ t.centerY }})
                 </td>
               </tr>
             </tbody>
@@ -352,4 +370,13 @@ const sparkPoints = computed(() => sparkRaw.value.map(p => `${p.x},${p.y}`).join
 /* 滚动条美化 */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+
+.bbox-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 </style>
