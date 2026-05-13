@@ -6,6 +6,8 @@ import json
 import logging
 import time
 import glob
+import threading
+import queue
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -28,6 +30,8 @@ SERVER_URL = f"http://{config['server_ip']}:{config['server_port']}{config['uplo
 DEVICE_ID = config["device_id"]
 
 logger.info("服务器地址: %s", SERVER_URL)
+upload_queue = queue.Queue(maxsize=200)
+
 
 # ========= HTTP Session（含自动重试）==========
 session = requests.Session()
@@ -48,24 +52,24 @@ RE_CENTER     = re.compile(r'中心点:\s*\((\d+),\s*(\d+)\)')
 RE_IMAGE      = re.compile(r'已保存:\s*(frame_\d+\.jpg)')
 RE_DETECTED   = re.compile(r'检测到人:\s*(是|否)')
 
-def cleanup_old_images():
-    """删除旧图片，防止异常情况下堆积"""
-    files = glob.glob("frame_*.jpg")
-
-    # 只保留最新20张
-    if len(files) <= 20:
-        return
-
-    files.sort(key=os.path.getmtime)
-
-    old_files = files[:-20]
-
-    for f in old_files:
-        try:
-            os.remove(f)
-            logger.info("清理旧图片: %s", f)
-        except Exception as e:
-            logger.warning("清理失败 %s: %s", f, e)
+# def cleanup_old_images():
+#     """删除旧图片，防止异常情况下堆积"""
+#     files = glob.glob("frame_*.jpg")
+#
+#     # 只保留最新20张
+#     if len(files) <= 20:
+#         return
+#
+#     files.sort(key=os.path.getmtime)
+#
+#     old_files = files[:-20]
+#
+#     for f in old_files:
+#         try:
+#             os.remove(f)
+#             logger.info("清理旧图片: %s", f)
+#         except Exception as e:
+#             logger.warning("清理失败 %s: %s", f, e)
 
 # ========= 上传函数 ==========
 def upload(data: dict | None) -> None:
@@ -121,6 +125,7 @@ export LD_LIBRARY_PATH=/opt/glibc-2.38/lib:/usr/lib/aarch64-linux-gnu:/lib/aarch
 /opt/glibc-2.38/lib/ld-linux-aarch64.so.1 ./rknn_yolov8_demo model/yolov8.rknn
 """
 
+
 process = subprocess.Popen(
     shell_cmd,
     shell=True,
@@ -133,23 +138,55 @@ process = subprocess.Popen(
     bufsize=1,
 )
 
+
+#新增上传线程
+def upload_worker():
+    while True:
+        data = upload_queue.get()
+
+        try:
+            if data is None:
+                break
+
+            upload(data)
+
+        except Exception as e:
+            logger.error("上传线程异常: %s", e)
+
+        finally:
+            upload_queue.task_done()
+
 logger.info("模型进程已启动，PID: %d", process.pid)
+worker = threading.Thread(target=upload_worker, daemon=True)
+worker.start()
 
 frame_data: dict | None = None
 
 # ========= 主循环 ==========
 try:
-    for line in process.stdout:
-        line = line.strip()
+    while True:
+        line = process.stdout.readline()
+
         if not line:
+            if process.poll() is not None:
+                break
+
+            time.sleep(0.001)
             continue
         logger.debug(">> %s", line)
 
         # 新帧开始 —— 先上传上一帧
         m = RE_FRAME.search(line)
         if m:
-            upload(frame_data)
-            cleanup_old_images()
+            if frame_data:
+                try:
+                    upload_queue.put_nowait(frame_data.copy())
+                except queue.Full:
+                    logger.warning("上传队列已满，丢弃帧 %s", frame_data["frameNo"])
+
+#             if frame_data and frame_data["frameNo"] % 50 == 0:
+#                 cleanup_old_images()
+
             frame_data = {
                 "frameNo": int(m.group(1)),
                 "detectCount": 0,
@@ -167,14 +204,14 @@ try:
             score = float(m.group(1))
 
             target = {
-                "index": 0,
+                "index": len(frame_data["targets"]),
                 "label": "person",
                 "score": score,
                 "centerX": 0,
                 "centerY": 0,
             }
 
-            frame_data["targets"] = [target]
+            frame_data["targets"].append(target)
             continue
 
 
@@ -184,8 +221,8 @@ try:
             cx = int(m.group(1))
             cy = int(m.group(2))
 
-            frame_data["targets"][0]["centerX"] = cx
-            frame_data["targets"][0]["centerY"] = cy
+            frame_data["targets"][-1]["centerX"] = cx
+            frame_data["targets"][-1]["centerY"] = cy
             continue
 
 
@@ -195,7 +232,7 @@ try:
             detected = m.group(1)
 
             if detected == "是":
-                frame_data["detectCount"] = 1
+                frame_data["detectCount"] = len(frame_data["targets"])
             else:
                 frame_data["detectCount"] = 0
                 frame_data["targets"] = []
@@ -207,11 +244,15 @@ try:
             frame_data["image"] = m.group(1)
 
 finally:
-    # ========= 修复：上传最后一帧 ==========
-    upload(frame_data)
-    cleanup_old_images()
+    if frame_data:
+        upload_queue.put(frame_data.copy())
+
+    upload_queue.put(None)
+
+    worker.join()
 
     process.wait()
+
     exit_code = process.returncode
 
     if exit_code != 0:
