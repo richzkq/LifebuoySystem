@@ -1,5 +1,7 @@
 <template>
   <div class="app">
+    <div class="background-overlay"></div>
+
     <header class="header">
       <div class="header-content">
         <span class="title">🛟 SMART LIFEBUOY 实时监控</span>
@@ -32,21 +34,21 @@
         <div class="canvas-wrap">
 
           <img
-              v-if="connected && frame.imageUrl"
-              :src="imageUrl(frame.imageUrl)"
-              class="detection-img"
-              ref="imgRef"
-              @load="onImageLoad"
+            v-if="connected && frame.imageUrl"
+            :src="imageUrl(frame.imageUrl)"
+            class="detection-img"
+            ref="imgRef"
+            @load="onImageLoad"
           />
 
           <video
-              v-else
-              src="/video.mp4"
-              class="detection-video"
-              autoplay
-              loop
-              muted
-              playsinline
+            v-else
+            src="/video.mp4" 
+            class="detection-video"
+            autoplay
+            loop
+            muted
+            playsinline
           ></video>
 
           <div v-if="!connected" class="overlay-status">
@@ -84,44 +86,44 @@
           </div>
 
           <div
-              v-if="!frame.targets?.length"
-              class="empty"
+            v-if="!frame.targets?.length"
+            class="empty"
           >
             无动态目标记录
           </div>
 
           <table
-              v-else
-              class="target-table"
+            v-else
+            class="target-table"
           >
             <thead>
-            <tr>
-              <th>ID</th>
-              <th>状态</th>
-              <th>位置</th>
-            </tr>
+              <tr>
+                <th>ID</th>
+                <th>状态</th>
+                <th>位置</th>
+              </tr>
             </thead>
 
             <tbody>
-            <tr
+              <tr
                 v-for="t in frame.targets"
                 :key="t.index"
-            >
-              <td>#{{ t.index }}</td>
+              >
+                <td>#{{ t.index }}</td>
 
-              <td>
+                <td>
                   <span
-                      class="badge"
-                      :style="{ background: scoreColor(t.score) }"
+                    class="badge"
+                    :style="{ background: scoreColor(t.score) }"
                   >
                     {{ t.label }}
                   </span>
-              </td>
+                </td>
 
-              <td>
-                ({{ t.centerX }}, {{ t.centerY }})
-              </td>
-            </tr>
+                <td>
+                  ({{ t.centerX }}, {{ t.centerY }})
+                </td>
+              </tr>
             </tbody>
           </table>
 
@@ -134,16 +136,16 @@
           </div>
 
           <div
-              v-if="alarms.length === 0"
-              class="empty"
+            v-if="alarms.length === 0"
+            class="empty"
           >
             暂无报警记录
           </div>
 
           <div
-              v-for="a in alarms"
-              :key="a.id"
-              class="alarm-item glass-item"
+            v-for="a in alarms"
+            :key="a.id"
+            class="alarm-item glass-item"
           >
 
             <div class="alarm-top">
@@ -179,24 +181,24 @@
           <div class="sparkline-wrap glass-item">
 
             <svg
-                width="100%"
-                height="60"
-                class="sparkline"
+              width="100%"
+              height="60"
+              class="sparkline"
             >
               <polyline
-                  :points="sparkPoints"
-                  fill="none"
-                  stroke="#FF5E00"
-                  stroke-width="2"
+                :points="sparkPoints"
+                fill="none"
+                stroke="#FF5E00"
+                stroke-width="2"
               />
 
               <circle
-                  v-for="(p, i) in sparkRaw"
-                  :key="i"
-                  :cx="p.x"
-                  :cy="p.y"
-                  r="2"
-                  fill="#FF5E00"
+                v-for="(p, i) in sparkRaw"
+                :key="i"
+                :cx="p.x"
+                :cy="p.y"
+                r="2"
+                fill="#fff"
               />
             </svg>
 
@@ -219,7 +221,7 @@
                 <i class="status-indicator"></i> 已连接
               </span>
             </div>
-
+            
             <div class="device-detail">
               <div class="detail-line">
                 <span class="detail-label">名称:</span>
@@ -255,7 +257,7 @@ import {
 } from '@element-plus/icons-vue'
 
 const WS_URL =
-    `${window.location.protocol}//${window.location.host}/ws`
+  `${window.location.protocol}//${window.location.host}/ws`
 
 const connected = ref(false)
 
@@ -331,16 +333,16 @@ async function fetchAlarmList() {
   try {
 
     const res =
-        await fetch('/api/alarm/list')
+      await fetch('/api/alarm/list')
 
     alarms.value =
-        await res.json()
+      await res.json()
 
   } catch (e) {
 
     console.error(
-        '报警列表获取失败',
-        e
+      '报警列表获取失败',
+      e
     )
   }
 }
@@ -360,10 +362,10 @@ const sparkRaw = computed(() => {
   }
 
   const max =
-      Math.max(
-          ...list.map(h => h.count),
-          1
-      )
+    Math.max(
+      ...list.map(h => h.count),
+      1
+    )
 
   const W = 260
   const H = 55
@@ -371,22 +373,22 @@ const sparkRaw = computed(() => {
 
   return list.map((h, i) => ({
     x:
-        PAD +
-        (i / Math.max(list.length - 1, 1))
-        * (W - PAD * 2),
+      PAD +
+      (i / Math.max(list.length - 1, 1))
+      * (W - PAD * 2),
 
     y:
-        H -
-        PAD -
-        (h.count / max)
-        * (H - PAD * 2),
+      H -
+      PAD -
+      (h.count / max)
+      * (H - PAD * 2),
   }))
 })
 
 const sparkPoints = computed(() =>
-    sparkRaw.value
-        .map(p => `${p.x},${p.y}`)
-        .join(' ')
+  sparkRaw.value
+    .map(p => `${p.x},${p.y}`)
+    .join(' ')
 )
 </script>
 
@@ -394,26 +396,33 @@ const sparkPoints = computed(() =>
 .app {
   position: relative;
   min-height: 100vh;
-  /* 移除图片，改为纯白背景 */
-  background-color: #ffffff;
-  /* 字体颜色改为深色，适配白底 */
-  color: #333333;
+  background: url('../assets/backgroundImage.png') no-repeat center center;
+  background-size: cover;
+  color: #fff;
   font-family: 'Inter', system-ui, sans-serif;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* 调整玻璃拟态的颜色为深色半透明，以适配白色背景 */
+.background-overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center,
+      rgba(15,23,42,0.2) 0%,
+      rgba(15,23,42,0.6) 100%);
+  z-index: 0;
+}
+
 .glass-effect {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(255,255,255,0.1);
   backdrop-filter: blur(25px);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255,255,255,0.2);
 }
 
 .glass-item {
-  background: rgba(0, 0, 0, 0.02);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 12px;
 }
 
@@ -504,8 +513,7 @@ const sparkPoints = computed(() =>
   gap: 12px;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.7); /* 调整了 loading 遮罩的颜色 */
-  color: #333;
+  background: rgba(0,0,0,0.4);
 }
 
 .stat-cards {
@@ -548,7 +556,7 @@ const sparkPoints = computed(() =>
 .target-table th,
 .target-table td {
   padding: 12px 10px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08); /* 表格边框改为深色透明 */
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   font-size: 13px;
 }
 
@@ -556,7 +564,6 @@ const sparkPoints = computed(() =>
   padding: 3px 10px;
   border-radius: 6px;
   font-size: 11px;
-  color: #fff; /* 徽章内的文字保持白色 */
 }
 
 .alarm-wrap {
@@ -587,17 +594,17 @@ const sparkPoints = computed(() =>
 
 .alarm-device {
   font-size: 12px;
-  color: rgba(0, 0, 0, 0.6); /* 改为深色半透明 */
+  color: rgba(255,255,255,0.7);
   margin-bottom: 5px;
 }
 
 .alarm-time {
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.4); /* 改为深色半透明 */
+  color: rgba(255,255,255,0.5);
 }
 
 .empty {
-  color: rgba(0, 0, 0, 0.4); /* 改为深色半透明 */
+  color: rgba(255,255,255,0.5);
   font-size: 13px;
 }
 
@@ -614,11 +621,11 @@ const sparkPoints = computed(() =>
 }
 
 .glass-input {
-  background: rgba(0, 0, 0, 0.03); /* 输入框背景 */
-  border: 1px solid rgba(0, 0, 0, 0.15); /* 输入框边框 */
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   padding: 6px 10px;
-  color: #333; /* 输入框文字颜色 */
+  color: #fff;
   font-size: 12px;
   outline: none;
   width: 130px;
@@ -626,13 +633,13 @@ const sparkPoints = computed(() =>
 }
 
 .glass-input::placeholder {
-  color: rgba(0, 0, 0, 0.3); /* 占位符颜色 */
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .glass-input:focus {
   border-color: #FF5E00;
-  background: #ffffff;
-  box-shadow: 0 0 5px rgba(255, 94, 0, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 5px rgba(255, 94, 0, 0.3);
 }
 
 .device-item {
@@ -647,7 +654,7 @@ const sparkPoints = computed(() =>
 }
 
 .device-id-tag {
-  background: rgba(255, 94, 0, 0.1);
+  background: rgba(255, 94, 0, 0.2);
   color: #FF5E00;
   padding: 2px 8px;
   border-radius: 4px;
@@ -668,7 +675,7 @@ const sparkPoints = computed(() =>
   height: 6px;
   background: #10B981;
   border-radius: 50%;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 8px #10B981;
 }
 
 .device-detail {
@@ -683,12 +690,12 @@ const sparkPoints = computed(() =>
 }
 
 .detail-label {
-  color: rgba(0, 0, 0, 0.5); /* 改为深色半透明 */
+  color: rgba(255, 255, 255, 0.5);
   width: 40px;
 }
 
 .detail-value {
-  color: rgba(0, 0, 0, 0.8); /* 改为深色 */
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .mono-text {
@@ -701,7 +708,6 @@ const sparkPoints = computed(() =>
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2); /* 滚动条适配浅色模式 */
-  border-radius: 4px;
+  background: rgba(255,255,255,0.2);
 }
 </style>
