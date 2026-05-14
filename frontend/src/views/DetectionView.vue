@@ -1,7 +1,5 @@
 <template>
   <div class="app">
-    <div class="background-overlay"></div>
-
     <header class="header">
       <div class="header-content">
         <span class="title">🛟 SMART LIFEBUOY 实时监控</span>
@@ -198,7 +196,7 @@
                   :cx="p.x"
                   :cy="p.y"
                   r="2"
-                  fill="#fff"
+                  fill="#FF5E00"
               />
             </svg>
 
@@ -207,8 +205,11 @@
         </div>
 
         <div class="device-list-wrap">
-          <div class="section-title">
-            设备资产管理
+          <div class="device-list-header">
+            <div class="section-title no-margin">
+              设备列表
+            </div>
+            <input type="text" class="device-search glass-input" placeholder="搜索设备..." />
           </div>
 
           <div class="device-item glass-item">
@@ -393,33 +394,26 @@ const sparkPoints = computed(() =>
 .app {
   position: relative;
   min-height: 100vh;
-  background: url('../assets/backgroundImage.png') no-repeat center center;
-  background-size: cover;
-  color: #fff;
+  /* 移除图片，改为纯白背景 */
+  background-color: #ffffff;
+  /* 字体颜色改为深色，适配白底 */
+  color: #333333;
   font-family: 'Inter', system-ui, sans-serif;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.background-overlay {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at center,
-  rgba(15,23,42,0.2) 0%,
-  rgba(15,23,42,0.6) 100%);
-  z-index: 0;
-}
-
+/* 调整玻璃拟态的颜色为深色半透明，以适配白色背景 */
 .glass-effect {
-  background: rgba(255,255,255,0.1);
+  background: rgba(0, 0, 0, 0.03);
   backdrop-filter: blur(25px);
-  border: 1px solid rgba(255,255,255,0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .glass-item {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 12px;
 }
 
@@ -510,7 +504,8 @@ const sparkPoints = computed(() =>
   gap: 12px;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.4);
+  background: rgba(255, 255, 255, 0.7); /* 调整了 loading 遮罩的颜色 */
+  color: #333;
 }
 
 .stat-cards {
@@ -541,6 +536,10 @@ const sparkPoints = computed(() =>
   font-weight: 700;
 }
 
+.section-title.no-margin {
+  margin-bottom: 0;
+}
+
 .target-table {
   width: 100%;
   border-collapse: collapse;
@@ -549,7 +548,7 @@ const sparkPoints = computed(() =>
 .target-table th,
 .target-table td {
   padding: 12px 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08); /* 表格边框改为深色透明 */
   font-size: 13px;
 }
 
@@ -557,6 +556,7 @@ const sparkPoints = computed(() =>
   padding: 3px 10px;
   border-radius: 6px;
   font-size: 11px;
+  color: #fff; /* 徽章内的文字保持白色 */
 }
 
 .alarm-wrap {
@@ -587,17 +587,17 @@ const sparkPoints = computed(() =>
 
 .alarm-device {
   font-size: 12px;
-  color: rgba(255,255,255,0.7);
+  color: rgba(0, 0, 0, 0.6); /* 改为深色半透明 */
   margin-bottom: 5px;
 }
 
 .alarm-time {
   font-size: 11px;
-  color: rgba(255,255,255,0.5);
+  color: rgba(0, 0, 0, 0.4); /* 改为深色半透明 */
 }
 
 .empty {
-  color: rgba(255,255,255,0.5);
+  color: rgba(0, 0, 0, 0.4); /* 改为深色半透明 */
   font-size: 13px;
 }
 
@@ -605,7 +605,36 @@ const sparkPoints = computed(() =>
   padding: 15px;
 }
 
-/* 设备列表样式 */
+/* 设备列表及搜索框样式 */
+.device-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.glass-input {
+  background: rgba(0, 0, 0, 0.03); /* 输入框背景 */
+  border: 1px solid rgba(0, 0, 0, 0.15); /* 输入框边框 */
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: #333; /* 输入框文字颜色 */
+  font-size: 12px;
+  outline: none;
+  width: 130px;
+  transition: all 0.3s ease;
+}
+
+.glass-input::placeholder {
+  color: rgba(0, 0, 0, 0.3); /* 占位符颜色 */
+}
+
+.glass-input:focus {
+  border-color: #FF5E00;
+  background: #ffffff;
+  box-shadow: 0 0 5px rgba(255, 94, 0, 0.2);
+}
+
 .device-item {
   padding: 15px;
 }
@@ -618,7 +647,7 @@ const sparkPoints = computed(() =>
 }
 
 .device-id-tag {
-  background: rgba(255, 94, 0, 0.2);
+  background: rgba(255, 94, 0, 0.1);
   color: #FF5E00;
   padding: 2px 8px;
   border-radius: 4px;
@@ -639,7 +668,7 @@ const sparkPoints = computed(() =>
   height: 6px;
   background: #10B981;
   border-radius: 50%;
-  box-shadow: 0 0 8px #10B981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
 }
 
 .device-detail {
@@ -654,12 +683,12 @@ const sparkPoints = computed(() =>
 }
 
 .detail-label {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(0, 0, 0, 0.5); /* 改为深色半透明 */
   width: 40px;
 }
 
 .detail-value {
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(0, 0, 0, 0.8); /* 改为深色 */
 }
 
 .mono-text {
@@ -672,6 +701,7 @@ const sparkPoints = computed(() =>
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.2);
+  background: rgba(0, 0, 0, 0.2); /* 滚动条适配浅色模式 */
+  border-radius: 4px;
 }
 </style>
