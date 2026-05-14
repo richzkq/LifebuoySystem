@@ -29,27 +29,26 @@
 
     <main class="main">
 
-      <!-- 左侧视频 -->
       <section class="panel panel--image glass-effect">
 
         <div class="canvas-wrap">
 
           <img
-            v-if="connected && frame.imageUrl"
-            :src="imageUrl(frame.imageUrl)"
-            class="detection-img"
-            ref="imgRef"
-            @load="onImageLoad"
+              v-if="connected && frame.imageUrl"
+              :src="imageUrl(frame.imageUrl)"
+              class="detection-img"
+              ref="imgRef"
+              @load="onImageLoad"
           />
 
           <video
-            v-else
-            src="/video.mp4" 
-            class="detection-video"
-            autoplay
-            loop
-            muted
-            playsinline
+              v-else
+              src="/video.mp4"
+              class="detection-video"
+              autoplay
+              loop
+              muted
+              playsinline
           ></video>
 
           <div v-if="!connected" class="overlay-status">
@@ -64,10 +63,8 @@
 
       </section>
 
-      <!-- 右侧 -->
       <section class="panel panel--info glass-effect">
 
-        <!-- 当前目标 -->
         <div class="stat-cards">
 
           <div class="card glass-item">
@@ -82,7 +79,6 @@
 
         </div>
 
-        <!-- 实时识别 -->
         <div class="target-list-wrap">
 
           <div class="section-title">
@@ -90,50 +86,49 @@
           </div>
 
           <div
-            v-if="!frame.targets?.length"
-            class="empty"
+              v-if="!frame.targets?.length"
+              class="empty"
           >
             无动态目标记录
           </div>
 
           <table
-            v-else
-            class="target-table"
+              v-else
+              class="target-table"
           >
             <thead>
-              <tr>
-                <th>ID</th>
-                <th>状态</th>
-                <th>位置</th>
-              </tr>
+            <tr>
+              <th>ID</th>
+              <th>状态</th>
+              <th>位置</th>
+            </tr>
             </thead>
 
             <tbody>
-              <tr
+            <tr
                 v-for="t in frame.targets"
                 :key="t.index"
-              >
-                <td>#{{ t.index }}</td>
+            >
+              <td>#{{ t.index }}</td>
 
-                <td>
+              <td>
                   <span
-                    class="badge"
-                    :style="{ background: scoreColor(t.score) }"
+                      class="badge"
+                      :style="{ background: scoreColor(t.score) }"
                   >
                     {{ t.label }}
                   </span>
-                </td>
+              </td>
 
-                <td>
-                  ({{ t.centerX }}, {{ t.centerY }})
-                </td>
-              </tr>
+              <td>
+                ({{ t.centerX }}, {{ t.centerY }})
+              </td>
+            </tr>
             </tbody>
           </table>
 
         </div>
 
-        <!-- 报警记录 -->
         <div class="alarm-wrap">
 
           <div class="section-title">
@@ -141,16 +136,16 @@
           </div>
 
           <div
-            v-if="alarms.length === 0"
-            class="empty"
+              v-if="alarms.length === 0"
+              class="empty"
           >
             暂无报警记录
           </div>
 
           <div
-            v-for="a in alarms"
-            :key="a.id"
-            class="alarm-item glass-item"
+              v-for="a in alarms"
+              :key="a.id"
+              class="alarm-item glass-item"
           >
 
             <div class="alarm-top">
@@ -177,7 +172,6 @@
 
         </div>
 
-        <!-- 检测频率 -->
         <div class="history-wrap">
 
           <div class="section-title">
@@ -187,29 +181,55 @@
           <div class="sparkline-wrap glass-item">
 
             <svg
-              width="100%"
-              height="60"
-              class="sparkline"
+                width="100%"
+                height="60"
+                class="sparkline"
             >
               <polyline
-                :points="sparkPoints"
-                fill="none"
-                stroke="#FF5E00"
-                stroke-width="2"
+                  :points="sparkPoints"
+                  fill="none"
+                  stroke="#FF5E00"
+                  stroke-width="2"
               />
 
               <circle
-                v-for="(p, i) in sparkRaw"
-                :key="i"
-                :cx="p.x"
-                :cy="p.y"
-                r="2"
-                fill="#fff"
+                  v-for="(p, i) in sparkRaw"
+                  :key="i"
+                  :cx="p.x"
+                  :cy="p.y"
+                  r="2"
+                  fill="#fff"
               />
             </svg>
 
           </div>
 
+        </div>
+
+        <div class="device-list-wrap">
+          <div class="section-title">
+            设备资产管理
+          </div>
+
+          <div class="device-item glass-item">
+            <div class="device-info-row">
+              <span class="device-id-tag">ID: 001</span>
+              <span class="device-online-status">
+                <i class="status-indicator"></i> 已连接
+              </span>
+            </div>
+
+            <div class="device-detail">
+              <div class="detail-line">
+                <span class="detail-label">名称:</span>
+                <span class="detail-value">rocket001</span>
+              </div>
+              <div class="detail-line">
+                <span class="detail-label">密钥:</span>
+                <span class="detail-value mono-text">LB-SEA-0001-ALPHA</span>
+              </div>
+            </div>
+          </div>
         </div>
 
       </section>
@@ -234,7 +254,7 @@ import {
 } from '@element-plus/icons-vue'
 
 const WS_URL =
-  `${window.location.protocol}//${window.location.host}/ws`
+    `${window.location.protocol}//${window.location.host}/ws`
 
 const connected = ref(false)
 
@@ -310,16 +330,16 @@ async function fetchAlarmList() {
   try {
 
     const res =
-      await fetch('/api/alarm/list')
+        await fetch('/api/alarm/list')
 
     alarms.value =
-      await res.json()
+        await res.json()
 
   } catch (e) {
 
     console.error(
-      '报警列表获取失败',
-      e
+        '报警列表获取失败',
+        e
     )
   }
 }
@@ -327,15 +347,6 @@ async function fetchAlarmList() {
 function onImageLoad() {}
 
 function scoreColor(score) {
-
-  if (score >= 0.7) {
-    return '#10B981'
-  }
-
-  if (score >= 0.4) {
-    return '#10B981'
-  }
-
   return '#10B981'
 }
 
@@ -348,10 +359,10 @@ const sparkRaw = computed(() => {
   }
 
   const max =
-    Math.max(
-      ...list.map(h => h.count),
-      1
-    )
+      Math.max(
+          ...list.map(h => h.count),
+          1
+      )
 
   const W = 260
   const H = 55
@@ -359,22 +370,22 @@ const sparkRaw = computed(() => {
 
   return list.map((h, i) => ({
     x:
-      PAD +
-      (i / Math.max(list.length - 1, 1))
-      * (W - PAD * 2),
+        PAD +
+        (i / Math.max(list.length - 1, 1))
+        * (W - PAD * 2),
 
     y:
-      H -
-      PAD -
-      (h.count / max)
-      * (H - PAD * 2),
+        H -
+        PAD -
+        (h.count / max)
+        * (H - PAD * 2),
   }))
 })
 
 const sparkPoints = computed(() =>
-  sparkRaw.value
-    .map(p => `${p.x},${p.y}`)
-    .join(' ')
+    sparkRaw.value
+        .map(p => `${p.x},${p.y}`)
+        .join(' ')
 )
 </script>
 
@@ -395,8 +406,8 @@ const sparkPoints = computed(() =>
   position: absolute;
   inset: 0;
   background: radial-gradient(circle at center,
-      rgba(15,23,42,0.2) 0%,
-      rgba(15,23,42,0.6) 100%);
+  rgba(15,23,42,0.2) 0%,
+  rgba(15,23,42,0.6) 100%);
   z-index: 0;
 }
 
@@ -456,6 +467,7 @@ const sparkPoints = computed(() =>
   display: flex;
   gap: 20px;
   padding: 20px;
+  overflow-y: auto;
 }
 
 .panel {
@@ -591,6 +603,68 @@ const sparkPoints = computed(() =>
 
 .sparkline-wrap {
   padding: 15px;
+}
+
+/* 设备列表样式 */
+.device-item {
+  padding: 15px;
+}
+
+.device-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.device-id-tag {
+  background: rgba(255, 94, 0, 0.2);
+  color: #FF5E00;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.device-online-status {
+  color: #10B981;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-indicator {
+  width: 6px;
+  height: 6px;
+  background: #10B981;
+  border-radius: 50%;
+  box-shadow: 0 0 8px #10B981;
+}
+
+.device-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-line {
+  display: flex;
+  font-size: 12px;
+}
+
+.detail-label {
+  color: rgba(255, 255, 255, 0.5);
+  width: 40px;
+}
+
+.detail-value {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mono-text {
+  font-family: 'Courier New', Courier, monospace;
+  letter-spacing: 0.5px;
 }
 
 ::-webkit-scrollbar {
