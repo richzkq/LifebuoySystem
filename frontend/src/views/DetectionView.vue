@@ -333,10 +333,10 @@ function scoreColor(score) {
   }
 
   if (score >= 0.4) {
-    return '#FF5E00'
+    return '#10B981'
   }
 
-  return '#EF4444'
+  return '#10B981'
 }
 
 const sparkRaw = computed(() => {
