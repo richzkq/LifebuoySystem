@@ -14,6 +14,12 @@ target/
 .springBeans
 .sts4-cache
 
+uploads/
+*.jpg
+*.png
+uploader.log
+
+
 ### IntelliJ IDEA ###
 .idea
 *.iws
