@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>4.0.5</version>
+        <version>3.4.5</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com</groupId>
@@ -32,17 +32,16 @@
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webmvc</artifactId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>
             <artifactId>mybatis-spring-boot-starter</artifactId>
-            <version>4.0.1</version>
+            <version>3.0.4</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
-            <version>4.1.0-M4</version>
         </dependency>
 
         <!--JWT依赖-->
@@ -70,13 +69,13 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>
             <artifactId>mybatis-spring-boot-starter-test</artifactId>
-            <version>4.0.1</version>
+            <version>3.0.4</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
