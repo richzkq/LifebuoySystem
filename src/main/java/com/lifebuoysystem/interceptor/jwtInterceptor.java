@@ -1,14 +1,9 @@
 package com.lifebuoysystem.interceptor;
 
-
 import com.lifebuoysystem.utils.jwtUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.servlet.HandlerInterceptor;
-
-/**
- * @author ZKQ
- */
 
 public class jwtInterceptor implements HandlerInterceptor {
 
@@ -17,17 +12,22 @@ public class jwtInterceptor implements HandlerInterceptor {
                              HttpServletResponse response,
                              Object handler) {
 
-        String token = request.getHeader("token");
-
         String path = request.getRequestURI();
+
+        // 放行接口
         if (path.startsWith("/device/upload") ||
                 path.startsWith("/login") ||
-                path.startsWith("/uploads/") ||   // 放行静态图片资源
-                path.startsWith("/ws")) {
+                path.startsWith("/user/login") ||
+                path.startsWith("/uploads/") ||
+                path.startsWith("/ws") ||
+                path.startsWith("/api/alarm")) {
+
             return true;
         }
 
-        if(token == null || token.isEmpty()){
+        String token = request.getHeader("token");
+
+        if (token == null || token.isEmpty()) {
             throw new RuntimeException("未登录");
         }
 

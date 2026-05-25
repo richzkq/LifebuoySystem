@@ -36,7 +36,9 @@ public class webConfig implements WebMvcConfigurer {
                         "/device/upload",
                         "/ws/**",
                         "/uploads/**",
-                        "/api/alarm/**"
+                        "/api/alarm/**",
+                        "/error"
+
                 );
     }
 
