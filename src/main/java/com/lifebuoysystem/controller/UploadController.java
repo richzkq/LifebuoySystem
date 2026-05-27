@@ -42,20 +42,31 @@ public class UploadController {
      */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Map<String, Object> upload(
-            @RequestParam("deviceId")    String deviceId,
-            @RequestParam("frameNo")     Integer frameNo,
-            @RequestParam("detectCount") Integer detectCount,
-            @RequestParam("targets")     String targetsJson,
-            @RequestParam("file") MultipartFile file) {
+
+        @RequestParam("deviceId") String deviceId,
+        @RequestParam("frameNo") Integer frameNo,
+
+        @RequestParam("drowningCount") Integer drowningCount,
+        @RequestParam("personCount") Integer personCount,
+        @RequestParam("callForHelp") Integer callForHelp,
+        @RequestParam("pressure") Integer pressure,
+        @RequestParam("alarm") Integer alarm,
+
+        @RequestParam("targets") String targetsJson,
+        @RequestParam("file") MultipartFile file
+
+
+    ) {
 
         try {
-            // ── 解析目标列表 ──────────────────────────────────────
-            List<FramePayload.Target> targets = objectMapper.readValue(
-                    targetsJson, new TypeReference<>() {});
 
-            // ── 图片转 Base64（前端直接用 <img :src="..."> 渲染）──
-//            String base64 = Base64.getEncoder().encodeToString(file.getBytes());
-//            String imageBase64 = "data:image/jpeg;base64," + base64;
+            // ========= 解析目标 =========
+            List<FramePayload.Target> targets = objectMapper.readValue(
+                    targetsJson,
+                    new TypeReference<>() {}
+            );
+
+            // ========= 保存图片 =========
             String filename = deviceId + "_latest.jpg";
 
             Path uploadPath = Paths.get("uploads");
@@ -68,26 +79,48 @@ public class UploadController {
 
             Files.write(filePath, file.getBytes());
 
-            // ── 组装推送体 ─────────────────────────────────────────
+            // ========= 组装推送 =========
             FramePayload payload = new FramePayload();
+
             payload.setDeviceId(deviceId);
             payload.setFrameNo(frameNo);
-            payload.setDetectCount(detectCount);
-//            payload.setImageBase64(imageBase64);
+
+            payload.setDrowningCount(drowningCount);
+            payload.setPersonCount(personCount);
+            payload.setCallForHelp(callForHelp);
+            payload.setPressure(pressure);
+            payload.setAlarm(alarm);
+
             payload.setImageUrl("/uploads/" + filename);
             payload.setTargets(targets);
 
-            // ── 向所有订阅 /topic/frames 的 Vue 客户端推送 ─────────
+            // ========= WebSocket 推送 =========
             broker.convertAndSend("/topic/frames", payload);
 
-            log.info("推送成功: deviceId={} frameNo={} targets={}",
-                    deviceId, frameNo, targets.size());
+            log.info(
+                    "上传成功 device={} frame={} drowning={} call={} pressure={}",
+                    deviceId,
+                    frameNo,
+                    drowningCount,
+                    callForHelp,
+                    pressure
+            );
 
-            return Map.of("code", 200, "message", "ok");
+            return Map.of(
+                    "code", 200,
+                    "message", "ok"
+            );
 
         } catch (Exception e) {
+
             log.error("上传处理失败", e);
-            return Map.of("code", 500, "message", e.getMessage());
+
+            return Map.of(
+                    "code", 500,
+                    "message", e.getMessage()
+            );
         }
+
     }
+
 }
