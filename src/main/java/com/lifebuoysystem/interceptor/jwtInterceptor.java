@@ -16,11 +16,11 @@ public class jwtInterceptor implements HandlerInterceptor {
 
         // 放行接口
         if (path.startsWith("/device/upload") ||
+                path.startsWith("/device/latest") ||
                 path.startsWith("/login") ||
                 path.startsWith("/user/login") ||
                 path.startsWith("/uploads/") ||
-                path.startsWith("/ws") ||
-                path.startsWith("/api/alarm")) {
+                path.startsWith("/ws")) {
 
             return true;
         }
