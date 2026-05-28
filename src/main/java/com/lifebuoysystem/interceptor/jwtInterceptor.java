@@ -13,6 +13,7 @@ public class jwtInterceptor implements HandlerInterceptor {
                              Object handler) {
 
         String path = request.getRequestURI();
+        System.out.println("当前请求路径: " + path);
 
         // 放行接口
         if (path.startsWith("/device/upload") ||

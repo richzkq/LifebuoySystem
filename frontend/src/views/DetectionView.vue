@@ -33,14 +33,15 @@
 
         <div class="canvas-wrap">
 
-          <img
-            v-if="connected && frame.imageUrl"
-            :src="imageUrl(frame.imageUrl)"
-            class="detection-img"
-            ref="imgRef"
-            @load="onImageLoad"
-          />
-
+<!--          <img-->
+<!--            v-if="connected && frame.imageUrl"-->
+<!--            :src="imageUrl(frame.imageUrl)"-->
+<!--            class="detection-img"-->
+<!--            ref="imgRef"-->
+<!--            @load="onImageLoad"-->
+<!--          />-->
+          <img src="http://47.83.199.93:8080/device/stream/rocket001"
+               alt="监控画面" style="width:100%;" />
           <video
             v-else
             src="/video.mp4" 

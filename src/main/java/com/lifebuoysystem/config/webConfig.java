@@ -37,7 +37,10 @@ public class webConfig implements WebMvcConfigurer {
                         "/ws/**",
                         "/uploads/**",
                         "/api/alarm/**",
-                        "/error"
+                        "/error",
+                        "/device/frame",       // 新增:接收图
+                        "/device/snapshot/**", // 新增:单张图
+                        "/device/stream/**" // 新增:MJPEG 流
 
                 );
     }

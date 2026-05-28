@@ -11,7 +11,9 @@ import queue
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# ================= 日志 =================
+# =========================================================
+# 日志
+# =========================================================
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,7 +26,9 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-# ================= 配置 =================
+# =========================================================
+# 读取配置
+# =========================================================
 
 with open("IPconfig.json", "r", encoding="utf-8") as f:
     config = json.load(f)
@@ -39,22 +43,35 @@ DEVICE_ID = config["device_id"]
 
 logger.info("服务器地址: %s", SERVER_URL)
 
-# ================= 路径 =================
+# =========================================================
+# RK3588 项目目录
+# =========================================================
 
 ROOT_DIR = "/home/elf/demo/make"
 
-MODEL_EXEC = os.path.join(ROOT_DIR, "rknn_vision")
+MODEL_EXEC = os.path.join(
+    ROOT_DIR,
+    "rknn_vision"
+)
 
-DROWNING_MODEL = "/home/elf/demo/best_int8_fixed.rknn"
+DROWNING_MODEL = (
+    "/home/elf/demo/best_int8_fixed.rknn"
+)
 
-PERSON_MODEL = "/home/elf/demo/yolov8m_int8_fixed.rknn"
+PERSON_MODEL = (
+    "/home/elf/demo/yolov8m_int8_fixed.rknn"
+)
 
-FRAME_DIR = "/home/elf/demo/make/frames_int8_pixel_box"
+FRAME_DIR = (
+    "/home/elf/demo/make/frames_int8_pixel_box"
+)
 
 logger.info("ROOT_DIR = %s", ROOT_DIR)
 logger.info("FRAME_DIR = %s", FRAME_DIR)
 
-# ================= HTTP =================
+# =========================================================
+# HTTP Session
+# =========================================================
 
 session = requests.Session()
 
@@ -65,21 +82,33 @@ retry_strategy = Retry(
     allowed_methods=["POST"]
 )
 
-adapter = HTTPAdapter(max_retries=retry_strategy)
+adapter = HTTPAdapter(
+    max_retries=retry_strategy
+)
 
 session.mount("http://", adapter)
 session.mount("https://", adapter)
 
-# ================= 队列 =================
+# =========================================================
+# 上传队列
+# =========================================================
 
 upload_queue = queue.Queue(maxsize=100)
 
-# ================= 正则 =================
+# =========================================================
+# 正则
+# =========================================================
 
-RE_FRAME = re.compile(r"=+\s*帧\s*(\d+)\s*=+")
+RE_FRAME = re.compile(
+    r"=+\s*帧\s*(\d+)\s*=+"
+)
 
 RE_DROWNING_COUNT = re.compile(
     r"Drowning=(\d+)"
+)
+
+RE_PERSON_COUNT = re.compile(
+    r"Person out of water=(\d+)"
 )
 
 RE_CALL = re.compile(
@@ -94,32 +123,45 @@ RE_TARGET = re.compile(
     r"Drowning:\s*conf=([\d.]+)\s*center=\((\d+),(\d+)\)"
 )
 
-# ================= 最新图片 =================
+# =========================================================
+# 获取最新图片
+# =========================================================
 
 def get_latest_image():
 
     try:
 
         files = [
+
             os.path.join(FRAME_DIR, f)
+
             for f in os.listdir(FRAME_DIR)
+
             if f.endswith(".jpg")
         ]
 
         if not files:
             return None
 
-        latest = max(files, key=os.path.getmtime)
+        latest = max(
+            files,
+            key=os.path.getmtime
+        )
 
         return latest
 
     except Exception as e:
 
-        logger.error("获取图片失败: %s", e)
+        logger.error(
+            "获取图片失败: %s",
+            e
+        )
 
         return None
 
-# ================= 上传 =================
+# =========================================================
+# 上传函数
+# =========================================================
 
 def upload(data):
 
@@ -133,23 +175,68 @@ def upload(data):
     if img_path and os.path.exists(img_path):
 
         try:
-            files["file"] = open(img_path, "rb")
-        except:
-            pass
+
+            files["file"] = open(
+                img_path,
+                "rb"
+            )
+
+        except Exception as e:
+
+            logger.error(
+                "打开图片失败: %s",
+                e
+            )
 
     form = {
 
+        # ================= 设备 =================
+
         "deviceId": DEVICE_ID,
 
-        "frameNo": str(data["frameNo"]),
+        # ================= 帧号 =================
 
-        "drowningCount": str(data["drowningCount"]),
+        "frameNo": str(
+            data["frameNo"]
+        ),
 
-        "heardCall": str(data["heardCall"]),
+        # ================= 溺水人数 =================
 
-        "pressure": str(data["pressure"]),
+        "drowningCount": str(
+            data["drowningCount"]
+        ),
 
-        "alarm": str(data["alarm"]),
+        # ================= 总人数 =================
+        # 溺水人数 + 水外人数
+
+        "personCount": str(
+
+            data["drowningCount"]
+
+            +
+
+            data["personOutOfWater"]
+        ),
+
+        # ================= 呼救声 =================
+
+        "callForHelp": str(
+            data["callForHelp"]
+        ),
+
+        # ================= 压力传感器 =================
+
+        "pressure": str(
+            data["pressure"]
+        ),
+
+        # ================= 综合报警 =================
+
+        "alarm": str(
+            data["alarm"]
+        ),
+
+        # ================= 目标坐标 =================
 
         "targets": json.dumps(
             data["targets"],
@@ -160,33 +247,51 @@ def upload(data):
     try:
 
         r = session.post(
+
             SERVER_URL,
+
             data=form,
+
             files=files,
+
             timeout=10
         )
 
         r.raise_for_status()
 
         logger.info(
-            "上传成功 frame=%s drowning=%s call=%s pressure=%s alarm=%s",
+
+            "上传成功 frame=%s drowning=%s person=%s call=%s pressure=%s alarm=%s",
+
             data["frameNo"],
+
             data["drowningCount"],
-            data["heardCall"],
+
+            data["personOutOfWater"],
+
+            data["callForHelp"],
+
             data["pressure"],
+
             data["alarm"]
         )
 
     except Exception as e:
 
-        logger.error("上传失败: %s", e)
+        logger.error(
+            "上传失败: %s",
+            e
+        )
 
     finally:
 
         if "file" in files:
+
             files["file"].close()
 
-# ================= 上传线程 =================
+# =========================================================
+# 上传线程
+# =========================================================
 
 def upload_worker():
 
@@ -203,13 +308,18 @@ def upload_worker():
 
         except Exception as e:
 
-            logger.error("上传线程异常: %s", e)
+            logger.error(
+                "上传线程异常: %s",
+                e
+            )
 
         finally:
 
             upload_queue.task_done()
 
-# ================= stderr =================
+# =========================================================
+# stderr 输出
+# =========================================================
 
 def stderr_reader(proc):
 
@@ -218,9 +328,15 @@ def stderr_reader(proc):
         line = line.strip()
 
         if line:
-            logger.error("[STDERR] %s", line)
 
-# ================= 启动模型 =================
+            logger.error(
+                "[STDERR] %s",
+                line
+            )
+
+# =========================================================
+# 启动 RKNN 模型
+# =========================================================
 
 process = subprocess.Popen(
 
@@ -231,10 +347,13 @@ process = subprocess.Popen(
     ],
 
     stdout=subprocess.PIPE,
+
     stderr=subprocess.PIPE,
 
     text=True,
+
     encoding="utf-8",
+
     errors="ignore",
 
     bufsize=1,
@@ -242,9 +361,14 @@ process = subprocess.Popen(
     cwd=ROOT_DIR
 )
 
-logger.info("模型进程启动 PID=%d", process.pid)
+logger.info(
+    "模型进程启动 PID=%d",
+    process.pid
+)
 
-# ================= 启动线程 =================
+# =========================================================
+# 启动线程
+# =========================================================
 
 threading.Thread(
     target=stderr_reader,
@@ -257,11 +381,15 @@ threading.Thread(
     daemon=True
 ).start()
 
-# ================= 当前帧 =================
+# =========================================================
+# 当前帧数据
+# =========================================================
 
 frame_data = None
 
-# ================= 主循环 =================
+# =========================================================
+# 主循环
+# =========================================================
 
 try:
 
@@ -288,30 +416,47 @@ try:
 
         print(line)
 
-        # ========= 新帧 =========
+        # =================================================
+        # 新帧
+        # =================================================
 
         m = RE_FRAME.search(line)
 
         if m:
 
+            # 上传上一帧
+
             if frame_data:
 
-                frame_data["image"] = get_latest_image()
+                frame_data["image"] = (
+                    get_latest_image()
+                )
 
                 try:
+
                     upload_queue.put_nowait(
                         frame_data.copy()
                     )
+
                 except queue.Full:
-                    logger.warning("队列已满")
+
+                    logger.warning(
+                        "上传队列已满"
+                    )
+
+            # 初始化当前帧
 
             frame_data = {
 
-                "frameNo": int(m.group(1)),
+                "frameNo": int(
+                    m.group(1)
+                ),
 
                 "drowningCount": 0,
 
-                "heardCall": 0,
+                "personOutOfWater": 0,
+
+                "callForHelp": 0,
 
                 "pressure": 0,
 
@@ -327,51 +472,87 @@ try:
         if frame_data is None:
             continue
 
-        # ========= 溺水人数 =========
+        # =================================================
+        # 溺水人数
+        # =================================================
 
         m = RE_DROWNING_COUNT.search(line)
 
         if m:
 
-            frame_data["drowningCount"] = int(m.group(1))
+            frame_data["drowningCount"] = int(
+                m.group(1)
+            )
 
             continue
 
-        # ========= 呼救 =========
+        # =================================================
+        # 水外人数
+        # =================================================
+
+        m = RE_PERSON_COUNT.search(line)
+
+        if m:
+
+            frame_data["personOutOfWater"] = int(
+                m.group(1)
+            )
+
+            continue
+
+        # =================================================
+        # 呼救声
+        # =================================================
 
         m = RE_CALL.search(line)
 
         if m:
 
-            frame_data["heardCall"] = int(m.group(1))
+            frame_data["callForHelp"] = int(
+                m.group(1)
+            )
 
             continue
 
-        # ========= 压力 =========
+        # =================================================
+        # 压力传感器
+        # =================================================
 
         m = RE_PRESSURE.search(line)
 
         if m:
 
-            frame_data["pressure"] = int(m.group(1))
+            frame_data["pressure"] = int(
+                m.group(1)
+            )
 
             continue
 
-        # ========= 目标 =========
+        # =================================================
+        # 溺水目标坐标
+        # =================================================
 
         m = RE_TARGET.search(line)
 
         if m:
 
-            score = float(m.group(1))
+            score = float(
+                m.group(1)
+            )
 
-            center_x = int(m.group(2))
+            center_x = int(
+                m.group(2)
+            )
 
-            center_y = int(m.group(3))
+            center_y = int(
+                m.group(3)
+            )
 
             frame_data["targets"].append({
 
-                "index": len(frame_data["targets"]),
+                "index": len(
+                    frame_data["targets"]
+                ),
 
                 "label": "drowning",
 
@@ -384,30 +565,33 @@ try:
 
             continue
 
-        # ========= 综合报警 =========
+        # =================================================
+        # 综合报警逻辑
+        # =================================================
+        #
+        # pressure=1
+        # 表示已经救到人
+        # 强制关闭所有报警
+        #
+        # 其它情况下：
+        # 有溺水 或 呼救声
+        # 就报警
+        #
+        # =================================================
 
-        # Pressure=1 优先级最高
-        # 已经救到人 => 强制关闭报警
+       # ================= 综合报警逻辑 =================
+       # pressure=1 表示已救到人 → 强制关闭所有报警
+       # 否则:有溺水 或 有呼救声 → 报警
+       if frame_data["pressure"] == 1:
+           frame_data["alarm"] = 0
+       elif frame_data["drowningCount"] > 0 or frame_data["callForHelp"] > 0:
+           frame_data["alarm"] = 1
+       else:
+           frame_data["alarm"] = 0
 
-        if frame_data["pressure"] == 1:
-
-            frame_data["alarm"] = 0
-
-        else:
-
-            if (
-                frame_data["drowningCount"] > 0
-                or
-                frame_data["heardCall"] > 0
-            ):
-
-                frame_data["alarm"] = 1
-
-            else:
-
-                frame_data["alarm"] = 0
-
-# ================= 退出 =================
+# =========================================================
+# 程序退出
+# =========================================================
 
 finally:
 
@@ -415,7 +599,9 @@ finally:
 
     if frame_data:
 
-        frame_data["image"] = get_latest_image()
+        frame_data["image"] = (
+            get_latest_image()
+        )
 
         try:
 
@@ -423,7 +609,8 @@ finally:
                 frame_data.copy()
             )
 
-        except:
+        except Exception:
+
             pass
 
     upload_queue.put(None)
