@@ -1,7 +1,6 @@
 package com.lifebuoysystem.config;
 
 import com.lifebuoysystem.interceptor.jwtInterceptor;
-import com.lifebuoysystem.interceptor.jwtInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.*;
 
@@ -36,7 +35,7 @@ public class webConfig implements WebMvcConfigurer {
                         "/device/upload",
                         "/ws/**",
                         "/uploads/**",
-                        "/api/alarm/**",
+                        "/alarm/**",
                         "/error",
                         "/device/frame",       // 新增:接收图
                         "/device/snapshot/**", // 新增:单张图

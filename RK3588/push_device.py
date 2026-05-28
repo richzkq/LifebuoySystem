@@ -62,12 +62,7 @@ PERSON_MODEL = (
     "/home/elf/demo/yolov8m_int8_fixed.rknn"
 )
 
-FRAME_DIR = (
-    "/home/elf/demo/make/frames_int8_pixel_box"
-)
-
 logger.info("ROOT_DIR = %s", ROOT_DIR)
-logger.info("FRAME_DIR = %s", FRAME_DIR)
 
 # =========================================================
 # HTTP Session
@@ -124,42 +119,6 @@ RE_TARGET = re.compile(
 )
 
 # =========================================================
-# 获取最新图片
-# =========================================================
-
-def get_latest_image():
-
-    try:
-
-        files = [
-
-            os.path.join(FRAME_DIR, f)
-
-            for f in os.listdir(FRAME_DIR)
-
-            if f.endswith(".jpg")
-        ]
-
-        if not files:
-            return None
-
-        latest = max(
-            files,
-            key=os.path.getmtime
-        )
-
-        return latest
-
-    except Exception as e:
-
-        logger.error(
-            "获取图片失败: %s",
-            e
-        )
-
-        return None
-
-# =========================================================
 # 计算综合报警
 # =========================================================
 #
@@ -179,33 +138,13 @@ def compute_alarm(data):
     return 0
 
 # =========================================================
-# 上传函数
+# 上传函数(纯数据,不再上传图片)
 # =========================================================
 
 def upload(data):
 
     if not data:
         return
-
-    img_path = data.get("image")
-
-    files = {}
-
-    if img_path and os.path.exists(img_path):
-
-        try:
-
-            files["file"] = open(
-                img_path,
-                "rb"
-            )
-
-        except Exception as e:
-
-            logger.error(
-                "打开图片失败: %s",
-                e
-            )
 
     form = {
 
@@ -271,8 +210,6 @@ def upload(data):
 
             data=form,
 
-            files=files,
-
             timeout=10
         )
 
@@ -301,12 +238,6 @@ def upload(data):
             "上传失败: %s",
             e
         )
-
-    finally:
-
-        if "file" in files:
-
-            files["file"].close()
 
 # =========================================================
 # 上传线程
@@ -449,10 +380,6 @@ try:
 
                 frame_data["alarm"] = compute_alarm(frame_data)
 
-                frame_data["image"] = (
-                    get_latest_image()
-                )
-
                 try:
 
                     upload_queue.put_nowait(
@@ -483,9 +410,7 @@ try:
 
                 "alarm": 0,
 
-                "targets": [],
-
-                "image": None
+                "targets": []
             }
 
             continue
@@ -597,10 +522,6 @@ finally:
     if frame_data:
 
         frame_data["alarm"] = compute_alarm(frame_data)
-
-        frame_data["image"] = (
-            get_latest_image()
-        )
 
         try:
 

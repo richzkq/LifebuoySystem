@@ -47,11 +47,14 @@ def push_worker():
                     with open(path, "rb") as fp:
                         img_bytes = fp.read()
                     files = {"file": ("frame.jpg", img_bytes, "image/jpeg")}
-                    session.post(FRAME_URL,
-                                 data={"deviceId": DEVICE_ID},
-                                 files=files, timeout=5)
+                    r = session.post(FRAME_URL,
+                                     data={"deviceId": DEVICE_ID},
+                                     files=files, timeout=5)
+                    r.raise_for_status()
                     last_path = path
                     last_mtime = mtime
+                    logger.info("推图成功 %s (%d bytes)",
+                                os.path.basename(path), len(img_bytes))
             except Exception as e:
                 logger.error("推图失败: %s", e)
         time.sleep(PUSH_INTERVAL)
