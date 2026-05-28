@@ -160,6 +160,25 @@ def get_latest_image():
         return None
 
 # =========================================================
+# 计算综合报警
+# =========================================================
+#
+# pressure=1 表示已经救到人,强制关闭所有报警
+# 否则:有溺水 或 有呼救声 就报警
+#
+# =========================================================
+
+def compute_alarm(data):
+
+    if data["pressure"] == 1:
+        return 0
+
+    if data["drowningCount"] > 0 or data["callForHelp"] > 0:
+        return 1
+
+    return 0
+
+# =========================================================
 # 上传函数
 # =========================================================
 
@@ -424,9 +443,11 @@ try:
 
         if m:
 
-            # 上传上一帧
+            # 上传上一帧(数据已收齐,此处算 alarm)
 
             if frame_data:
+
+                frame_data["alarm"] = compute_alarm(frame_data)
 
                 frame_data["image"] = (
                     get_latest_image()
@@ -565,30 +586,6 @@ try:
 
             continue
 
-        # =================================================
-        # 综合报警逻辑
-        # =================================================
-        #
-        # pressure=1
-        # 表示已经救到人
-        # 强制关闭所有报警
-        #
-        # 其它情况下：
-        # 有溺水 或 呼救声
-        # 就报警
-        #
-        # =================================================
-
-       # ================= 综合报警逻辑 =================
-       # pressure=1 表示已救到人 → 强制关闭所有报警
-       # 否则:有溺水 或 有呼救声 → 报警
-       if frame_data["pressure"] == 1:
-           frame_data["alarm"] = 0
-       elif frame_data["drowningCount"] > 0 or frame_data["callForHelp"] > 0:
-           frame_data["alarm"] = 1
-       else:
-           frame_data["alarm"] = 0
-
 # =========================================================
 # 程序退出
 # =========================================================
@@ -598,6 +595,8 @@ finally:
     logger.info("程序退出")
 
     if frame_data:
+
+        frame_data["alarm"] = compute_alarm(frame_data)
 
         frame_data["image"] = (
             get_latest_image()
