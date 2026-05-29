@@ -69,7 +69,7 @@ public class DeviceController {
             if (nowDrowning && !wasDrowning) {
                 // 从「无溺水」跳变到「有溺水」→ 写一条记录
 
-                alarmRecordMapper.insert(deviceId, "Drowning", "UNHANDLED");
+                alarmRecordMapper.insert(deviceId, "Drowning", "HANDLED");
             }
             lastDrowning.put(deviceId, nowDrowning);
 
