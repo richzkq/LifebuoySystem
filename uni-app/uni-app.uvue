@@ -78,14 +78,9 @@ const CALL_ALARM_HOLD_MS = 15000
 const speak = (text) => {
   // #ifdef APP-PLUS
   if (typeof plus !== 'undefined' && plus.speech) {
-    plus.speech.speak({
-      text,
-      lang      : 'zh-cn',
-      speed     : 1.0,
-      pitch     : 1.0,
-      volume    : 1.0,
-      oncomplete: () => console.log('TTS 播报完成'),
-      onerror   : (e) => console.error('TTS 错误:', e),
+    plus.speech.startSpeak({
+      text: text,
+      lang: 'zh-CN'
     })
   }
   // #endif

@@ -146,7 +146,7 @@ public class DeviceController {
         }
         // 呼救锁存:最近 15 秒内有过呼救,就持续返回 1
         Long lastCall = lastCallForHelpTime.get(deviceId);
-        if (lastCall != null && System.currentTimeMillis() - lastCall < 15000) {
+        if (lastCall != null && System.currentTimeMillis() - lastCall < 30000) {
             status.setCallForHelp(1);
         }
         return status;
