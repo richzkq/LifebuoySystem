@@ -285,6 +285,7 @@ const history = ref([])
 const imgTimestamp = ref(Date.now())
 
 let stompClient = null
+let lastPressure = 0
 
 onMounted(() => {
 
@@ -322,8 +323,19 @@ onMounted(() => {
 
         const data = JSON.parse(msg.body)
         console.log('收到实时数据:', data)
-
         frame.value = data
+
+        if (data.pressure === 1 && lastPressure !== 1) {
+          ElMessage.success({
+            message: '救援结束',
+            duration: 3000,
+            showClose: true
+          })
+        }
+        lastPressure = data.pressure ?? 0
+
+        imgTimestamp.value = Date.now()
+
 
         imgTimestamp.value = Date.now()
 
