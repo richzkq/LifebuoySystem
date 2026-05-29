@@ -68,12 +68,14 @@ public class DeviceController {
 
             if (nowDrowning && !wasDrowning) {
                 // 从「无溺水」跳变到「有溺水」→ 写一条记录
+
                 alarmRecordMapper.insert(deviceId, "Drowning", "UNHANDLED");
             }
             lastDrowning.put(deviceId, nowDrowning);
 
             // 2. 实时状态推送(前端刷新画面) ============
-            messagingTemplate.convertAndSend("/topic/device/" + deviceId, status);
+//            log.info("WS push -> /topic/frames/{}, status={}", deviceId, status);
+            messagingTemplate.convertAndSend("/topic/frames/" + deviceId, status);
 
            //3. 呼救声弹窗(只推不写库) ============
             if (callForHelp != null && callForHelp > 0) {

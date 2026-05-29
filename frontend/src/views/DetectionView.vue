@@ -23,6 +23,24 @@
           <span>
             帧号: {{ frame.frameNo ?? '—' }}
           </span>
+
+          <span class="divider">|</span>
+
+          <span>
+            溺水人数: {{ frame.drowningCount ?? '—' }}
+          </span>
+
+          <span class="divider">|</span>
+
+          <span>
+            呼救声: {{ frame.callForHelp ?? '—' }}
+          </span>
+
+          <span class="divider">|</span>
+
+          <span>
+            报警: <span :style="{ color: frame.alarm === 1 ? '#EF4444' : '#10B981' }">{{ frame.alarm === 1 ? '有' : '无' }}</span>
+          </span>
         </div>
       </div>
     </header>
@@ -33,7 +51,7 @@
 
         <div class="canvas-wrap">
 
-          <img src="http://47.83.199.93:8080/device/stream/rocket001"
+          <img id="monitorImage" src="http://47.83.199.93:8080/device/stream/rocket001"
                alt="监控画面" style="width:100%;" />
 
           <div v-if="!connected" class="overlay-status">
@@ -54,11 +72,11 @@
 
           <div class="card glass-item">
             <div class="card__num">
-              {{ frame.detectCount ?? 0 }}
+              {{ frame.personCount ?? 0 }}
             </div>
 
             <div class="card__label">
-              当前目标
+              总人数
             </div>
           </div>
 
@@ -246,7 +264,16 @@ const WS_URL =
 
 const connected = ref(false)
 
+const currentDeviceId = ref('rocket001') // 默认设备ID
+
 const frame = ref({
+  deviceId: null,
+  frameNo: null,
+  drowningCount: 0,
+  personCount: 0,
+  callForHelp: 0,
+  pressure: 0,
+  alarm: 0,
   targets: []
 })
 
@@ -264,6 +291,22 @@ onMounted(() => {
 
   fetchAlarmList()
 
+  // 从监控图片中提取 deviceId
+  const imgElement = document.getElementById('monitorImage')
+  if (imgElement && imgElement.src) {
+    try {
+      const url = new URL(imgElement.src)
+      const pathParts = url.pathname.split('/')
+      // 预期路径格式: /device/stream/{deviceId}
+      if (pathParts.length >= 4 && pathParts[pathParts.length - 2] === 'stream') {
+        currentDeviceId.value = pathParts[pathParts.length - 1]
+        console.log('从图片URL中提取到设备ID:', currentDeviceId.value)
+      }
+    } catch (e) {
+      console.error('解析图片URL中的设备ID失败:', e)
+    }
+  }
+
   stompClient = new Client({
 
     webSocketFactory: () => new SockJS(WS_URL),
@@ -273,10 +316,13 @@ onMounted(() => {
     onConnect: () => {
 
       connected.value = true
+      console.log('WebSocket 已连接')
 
-      stompClient.subscribe('/topic/frames', (msg) => {
+      // 订阅设备特定的主题
+      stompClient.subscribe('/topic/frames/' + currentDeviceId.value, (msg) => {
 
         const data = JSON.parse(msg.body)
+        console.log('收到实时数据:', data)
 
         frame.value = data
 
@@ -284,7 +330,7 @@ onMounted(() => {
 
         history.value.push({
           frameNo: data.frameNo,
-          count: data.detectCount ?? 0
+          count: data.personCount ?? 0 // 使用 personCount 作为统计数量
         })
 
         if (history.value.length > 15) {
@@ -292,10 +338,20 @@ onMounted(() => {
         }
 
       })
+      
+      // 订阅全局报警主题，用于呼救声弹窗（如果需要实时弹窗通知）
+      stompClient.subscribe('/topic/alarm', (msg) => {
+        const alarmData = JSON.parse(msg.body)
+        console.log('收到实时报警:', alarmData)
+        // TODO: 在这里处理前端的实时报警弹窗逻辑
+        // 例如：ElMessage.warning(alarmData.message)
+      })
+
     },
 
     onDisconnect: () => {
       connected.value = false
+      console.log('WebSocket 已断开')
     }
   })
 

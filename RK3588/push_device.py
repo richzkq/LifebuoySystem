@@ -418,98 +418,38 @@ try:
         if frame_data is None:
             continue
 
-        # =================================================
-        # 溺水人数
-        # =================================================
-
-        m = RE_DROWNING_COUNT.search(line)
-
-        if m:
-
-            frame_data["drowningCount"] = int(
-                m.group(1)
-            )
-
+        # 跳过 FPS 统计行(里面也有 Drowning=/Person= 会误匹配)
+        if line.startswith("[FPS]"):
             continue
 
-        # =================================================
-        # 水外人数
-        # =================================================
+        # 同一行可能含多个字段,逐个 search,不要 continue
+        m = RE_DROWNING_COUNT.search(line)
+        if m:
+            frame_data["drowningCount"] = int(m.group(1))
 
         m = RE_PERSON_COUNT.search(line)
-
         if m:
-
-            frame_data["personOutOfWater"] = int(
-                m.group(1)
-            )
-
-            continue
-
-        # =================================================
-        # 呼救声
-        # =================================================
+            frame_data["personOutOfWater"] = int(m.group(1))
 
         m = RE_CALL.search(line)
-
         if m:
-
-            frame_data["callForHelp"] = int(
-                m.group(1)
-            )
-
-            continue
-
-        # =================================================
-        # 压力传感器
-        # =================================================
+            frame_data["callForHelp"] = int(m.group(1))
 
         m = RE_PRESSURE.search(line)
-
         if m:
-
-            frame_data["pressure"] = int(
-                m.group(1)
-            )
-
-            continue
-
-        # =================================================
-        # 溺水目标坐标
-        # =================================================
+            frame_data["pressure"] = int(m.group(1))
 
         m = RE_TARGET.search(line)
-
         if m:
-
-            score = float(
-                m.group(1)
-            )
-
-            center_x = int(
-                m.group(2)
-            )
-
-            center_y = int(
-                m.group(3)
-            )
-
             frame_data["targets"].append({
-
-                "index": len(
-                    frame_data["targets"]
-                ),
-
+                "index": len(frame_data["targets"]),
                 "label": "drowning",
-
-                "score": score,
-
-                "centerX": center_x,
-
-                "centerY": center_y
+                "score": float(m.group(1)),
+                "centerX": int(m.group(2)),
+                "centerY": int(m.group(3)),
             })
 
-            continue
+        continue
 
 # =========================================================
 # 程序退出
