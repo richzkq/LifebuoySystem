@@ -343,16 +343,22 @@ onMounted(() => {
         const alarmData = JSON.parse(msg.body)
         console.log('收到实时报警:', alarmData)
         if (alarmData.type === 'callForHelp') {
-          ElMessage.warning({
-            dangerouslyUseHTMLString: true, // 允许使用 HTML 字符串
-            message: `<div>
-                        <p style="margin: 0; font-size: 16px; font-weight: bold;">🚨 呼救声报警！</p>
-                        <p style="margin: 5px 0 0; font-size: 14px;">${alarmData.message}</p>
-                        <p style="margin: 5px 0 0; font-size: 12px; color: #909399;">${new Date().toLocaleString()}</p>
-                      </div>`,
-            duration: 0, // 持续时间0，表示不自动关闭，需要手动关闭
-            showClose: true, // 显示关闭按钮
-            customClass: 'large-alarm-message' // 添加自定义类名
+          ElMessage.error({
+            dangerouslyUseHTMLString: true, 
+            message: `
+              <div class="glass-alarm-box">
+                <div class="glass-alarm-header">
+                  <span class="glass-alarm-dot"></span>
+                  <span class="glass-alarm-title">检测到呼救声</span>
+                </div>
+                <div class="glass-alarm-content">
+                  ${alarmData.message || '未知设备触发'}
+                </div>
+              </div>
+            `,
+            duration: 0, 
+            showClose: true, 
+            customClass: 'glass-alarm-message' // 专为磨砂玻璃定制的类名
           })
         }
       })
@@ -649,6 +655,10 @@ const sparkPoints = computed(() =>
   margin-bottom: 5px;
 }
 
+
+
+
+
 .alarm-time {
   font-size: 11px;
   color: rgba(255,255,255,0.5);
@@ -691,6 +701,109 @@ const sparkPoints = computed(() =>
   50% { transform: scale(1.05); opacity: 0.7; }
   100% { transform: scale(1); opacity: 1; }
 }
+
+
+
+
+/* ==========================================
+   🛡️ 智能救生圈大屏：极简磨砂玻璃应急弹窗 
+   ========================================== */
+
+/* 1. 复用并规范红色渐变外发光的呼吸动画 */
+@keyframes glass-pulse-red {
+  0% { 
+    box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.25); 
+    border-color: rgba(255, 255, 255, 0.25); 
+  }
+  50% { 
+    box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.55); 
+    border-color: rgba(239, 68, 68, 0.6); /* 险情加深时边缘泛红 */
+  }
+  100% { 
+    box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.25); 
+    border-color: rgba(255, 255, 255, 0.25); 
+  }
+}
+
+@keyframes glass-dot-flash {
+  0%, 100% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.15); box-shadow: 0 0 10px #EF4444; }
+}
+
+/* 2. 深度穿透：重构 Element Plus 弹窗为高透明磨砂玻璃质感 */
+:deep(.glass-alarm-message) {
+  /* 核心：半透明白、高模糊滤镜，完美的 Glassmorphism */
+  background: rgba(255, 255, 255, 0.06) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  
+  /* 微细高光白边框，磨砂玻璃的高级感灵魂 */
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 12px !important;
+  
+  padding: 16px 20px !important;
+  width: 310px !important;
+  min-width: 310px !important;
+  align-items: center !important;
+  
+  /* 挂载呼吸灯动画 */
+  animation: glass-pulse-red 2.5s infinite ease-in-out !important;
+}
+
+/* 3. 弹窗自带关闭按钮微调 */
+:deep(.glass-alarm-message .el-message__closeBtn) {
+  color: rgba(255, 255, 255, 0.5) !important;
+  font-size: 14px;
+}
+:deep(.glass-alarm-message .el-message__closeBtn:hover) {
+  color: #EF4444 !important;
+}
+:deep(.glass-alarm-message .el-message__icon) {
+  display: none !important; /* 隐藏默认提示图标 */
+}
+
+/* 4. 内部极简结构布局 */
+.glass-alarm-box {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 标题栏：去掉了刺眼的霓虹感，采用柔和高亮红 */
+.glass-alarm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 左侧微米级警示呼吸点 */
+.glass-alarm-dot {
+  width: 7px;
+  height: 7px;
+  background-color: #EF4444;
+  border-radius: 50%;
+  display: inline-block;
+  animation: glass-dot-flash 1.2s infinite ease-in-out;
+}
+
+.glass-alarm-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #EF4444;
+  letter-spacing: 0.5px;
+}
+
+/* 内容区：纯净白字，去掉复杂的刻度线，完全融入磨砂背景 */
+.glass-alarm-content {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  padding-left: 15px;
+}
+
+
+
 
 /* 设备列表及搜索框样式 */
 .device-list-header {
