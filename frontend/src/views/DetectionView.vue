@@ -349,7 +349,7 @@ onMounted(() => {
             <div class="glass-alarm-box">
               <div class="glass-alarm-header">
                 <span class="glass-alarm-dot"></span>
-                <span class="glass-alarm-title">检测到呼救声</span>
+                <span class="glass-alarm-title"></span>
               </div>
               <div class="glass-alarm-content">
                 ${alarmData.message || '未知设备触发'}
