@@ -344,21 +344,24 @@ onMounted(() => {
         console.log('收到实时报警:', alarmData)
         if (alarmData.type === 'callForHelp') {
           ElMessage.error({
-            dangerouslyUseHTMLString: true, 
+            dangerouslyUseHTMLString: true,
             message: `
-              <div class="glass-alarm-box">
-                <div class="glass-alarm-header">
-                  <span class="glass-alarm-dot"></span>
-                  <span class="glass-alarm-title">检测到呼救声</span>
-                </div>
-                <div class="glass-alarm-content">
-                  ${alarmData.message || '未知设备触发'}
-                </div>
+            <div class="glass-alarm-box">
+              <div class="glass-alarm-header">
+                <span class="glass-alarm-dot"></span>
+                <span class="glass-alarm-title">检测到呼救声</span>
               </div>
-            `,
-            duration: 0, 
-            showClose: true, 
-            customClass: 'glass-alarm-message' // 专为磨砂玻璃定制的类名
+              <div class="glass-alarm-content">
+                ${alarmData.message || '未知设备触发'}
+              </div>
+              <div class="glass-alarm-time">
+                ${new Date().toLocaleTimeString()}
+              </div>
+            </div>
+          `,
+            duration: 0,
+            showClose: true,
+            customClass: 'glass-alarm-message' // 绑定专属类名
           })
         }
       })
@@ -706,81 +709,87 @@ const sparkPoints = computed(() =>
 
 
 /* ==========================================
-   🛡️ 智能救生圈大屏：极简磨砂玻璃应急弹窗 
+   🛡️ 智能救生圈大屏：极简磨砂玻璃应急弹窗（强力重置版）
    ========================================== */
 
-/* 1. 复用并规范红色渐变外发光的呼吸动画 */
+/* 红色外发光微弱呼吸动画 */
 @keyframes glass-pulse-red {
-  0% { 
-    box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.25); 
-    border-color: rgba(255, 255, 255, 0.25); 
+  0% {
+    box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2) !important;
   }
-  50% { 
-    box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.55); 
-    border-color: rgba(239, 68, 68, 0.6); /* 险情加深时边缘泛红 */
+  50% {
+    box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.45), inset 0 0 15px rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.6) !important;
   }
-  100% { 
-    box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.25); 
-    border-color: rgba(255, 255, 255, 0.25); 
+  100% {
+    box-shadow: 0 8px 32px 0 rgba(239, 68, 68, 0.2), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2) !important;
   }
 }
 
 @keyframes glass-dot-flash {
   0%, 100% { opacity: 0.4; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.15); box-shadow: 0 0 10px #EF4444; }
+  50% { opacity: 1; transform: scale(1.2); box-shadow: 0 0 8px #EF4444; }
 }
 
-/* 2. 深度穿透：重构 Element Plus 弹窗为高透明磨砂玻璃质感 */
-:deep(.glass-alarm-message) {
-  /* 核心：半透明白、高模糊滤镜，完美的 Glassmorphism */
-  background: rgba(255, 255, 255, 0.06) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  
-  /* 微细高光白边框，磨砂玻璃的高级感灵魂 */
-  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+/* 💥 核心重置：彻底干掉 Element 默认的粉红色和白底背景 */
+body .el-message.glass-alarm-message {
+  background: rgba(255, 255, 255, 0.08) !important; /* 降低白底，提高透明度 */
+  backdrop-filter: blur(20px) !important;             /* 磨砂玻璃的核心滤镜 */
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important; /* 精致的高光白边框 */
   border-radius: 12px !important;
-  
   padding: 16px 20px !important;
-  width: 310px !important;
-  min-width: 310px !important;
-  align-items: center !important;
-  
-  /* 挂载呼吸灯动画 */
+  width: 300px !important;
+  min-width: 300px !important;
+  height: auto !important;
+  display: flex !important;
+  align-items: flex-start !important; /* 顶对齐，防止图文重叠 */
   animation: glass-pulse-red 2.5s infinite ease-in-out !important;
 }
 
-/* 3. 弹窗自带关闭按钮微调 */
-:deep(.glass-alarm-message .el-message__closeBtn) {
-  color: rgba(255, 255, 255, 0.5) !important;
-  font-size: 14px;
+/* 砍掉 Element 自带的那个大叉叉图标背景和左侧默认小图标 */
+body .glass-alarm-message .el-message__icon {
+  display: none !important;
 }
-:deep(.glass-alarm-message .el-message__closeBtn:hover) {
-  color: #EF4444 !important;
-}
-:deep(.glass-alarm-message .el-message__icon) {
-  display: none !important; /* 隐藏默认提示图标 */
+body .glass-alarm-message .el-message__content {
+  padding: 0 !important;
+  width: 100% !important;
 }
 
-/* 4. 内部极简结构布局 */
+/* 自带关闭按钮微调 */
+body .glass-alarm-message .el-message__closeBtn {
+  color: rgba(255, 255, 255, 0.6) !important;
+  position: absolute !important;
+  top: 14px !important;
+  right: 14px !important;
+}
+body .glass-alarm-message .el-message__closeBtn:hover {
+  color: #EF4444 !important;
+}
+
+/* ─── 内部磨砂盒子排版 ─── */
 .glass-alarm-box {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px; /* 让标题和内容撑开，绝不重叠 */
+  text-align: left;
 }
 
-/* 标题栏：去掉了刺眼的霓虹感，采用柔和高亮红 */
+/* 标题栏 */
 .glass-alarm-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  line-height: 1;
 }
 
-/* 左侧微米级警示呼吸点 */
+/* 警示呼吸点 */
 .glass-alarm-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   background-color: #EF4444;
   border-radius: 50%;
   display: inline-block;
@@ -790,16 +799,26 @@ const sparkPoints = computed(() =>
 .glass-alarm-title {
   font-size: 16px;
   font-weight: bold;
-  color: #EF4444;
+  color: #EF4444 !important; /* 纯正警示红 */
   letter-spacing: 0.5px;
 }
 
-/* 内容区：纯净白字，去掉复杂的刻度线，完全融入磨砂背景 */
+/* 设备 ID 内容区 */
 .glass-alarm-content {
   font-size: 14px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  padding-left: 15px;
+  color: rgba(255, 255, 255, 0.95) !important; /* 纯净白色，不跟标题重叠 */
+  padding-left: 16px;
+  line-height: 1.2;
+}
+
+/* 右下角极简时间戳 */
+.glass-alarm-time {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: right;
+  width: 100%;
+  margin-top: 4px;
 }
 
 
