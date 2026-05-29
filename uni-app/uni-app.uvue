@@ -1,0 +1,386 @@
+<template>
+  <view class="page-container">
+    <view class="bg-glow bg-blue"></view>
+    <view class="bg-glow bg-pink"></view>
+
+    <view class="main-content">
+      <view class="header-section">
+        <text class="brand-title">SMART LIFEBUOY</text>
+        <text class="brand-subtitle">智能救生圈 · 中央数据看板</text>
+      </view>
+
+      <view class="glass-card">
+        <view class="status-bar" :class="{'status-bar-alert': isAlarm == 1 && pressureStatus != 1, 'status-bar-safe': pressureStatus == 1}">
+          <view class="status-dot" :class="{'status-dot-blink': isAlarm == 1 && pressureStatus != 1}"></view>
+          <text class="status-msg-text">{{ systemMessage }}</text>
+        </view>
+
+        <view class="card-divider"></view>
+
+        <view class="modules-grid">
+
+          <view class="module-item" :class="{'module-item-active-sound': callAlarmActive}">
+            <view class="module-header">
+              <text class="module-icon">🔊</text>
+              <text class="module-title">呼救报警</text>
+            </view>
+            <view class="module-badge" :class="{'badge-active-sound': callAlarmActive}">
+              <text class="badge-text" :class="{'badge-text-active': callAlarmActive}">
+                {{ callAlarmActive ? '侦测到呼救' : '就绪中' }}
+              </text>
+            </view>
+          </view>
+
+          <view class="module-item" :class="{'module-item-active-vision': drowningCount > 0 && pressureStatus != 1}">
+            <view class="module-header">
+              <text class="module-icon">👁️</text>
+              <text class="module-title">监控报警</text>
+            </view>
+            <view class="module-badge" :class="{'badge-active-vision': drowningCount > 0 && pressureStatus != 1}">
+              <text class="badge-text" :class="{'badge-text-active': drowningCount > 0 && pressureStatus != 1}">
+                {{ drowningCount > 0 ? '发现疑似目标' : '扫描中' }}
+              </text>
+            </view>
+          </view>
+
+        </view>
+      </view>
+
+      <view class="footer-section">
+        <text class="footer-device-id">📡 当前终端 ID : {{ deviceId }}</text>
+        <text class="footer-secure-text">🔒 连通自建 Web 端：47.83.199.93</text>
+      </view>
+
+    </view>
+  </view>
+</template>
+
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+
+const deviceId        = ref('rocket001')
+const currentFrame    = ref(0)
+const drowningCount   = ref(0)
+const heardCallCount  = ref(0)
+const pressureStatus  = ref(0)
+const isAlarm         = ref(0)
+const systemMessage   = ref('初始化连接中...')
+const callAlarmActive = ref(false)
+
+const API_URL = 'http://47.83.199.93:8080/device/latest'
+
+let timer = null
+let callAlarmTimeout = null
+let lastVisionState = false
+
+const CALL_ALARM_HOLD_MS = 15000
+
+const speak = (text) => {
+  // #ifdef APP-PLUS
+  if (typeof plus !== 'undefined' && plus.speech) {
+    plus.speech.speak({
+      text,
+      lang      : 'zh-cn',
+      speed     : 1.0,
+      pitch     : 1.0,
+      volume    : 1.0,
+      oncomplete: () => console.log('TTS 播报完成'),
+      onerror   : (e) => console.error('TTS 错误:', e),
+    })
+  }
+  // #endif
+}
+
+const activateCallAlarm = () => {
+  // 跟之前能用的版本一致：直接激活，不判断 wasActive
+  // 同时重置倒计时，保证持续呼救时一直保持激活
+  callAlarmActive.value = true
+  if (callAlarmTimeout !== null) {
+    clearTimeout(callAlarmTimeout)
+  }
+  callAlarmTimeout = setTimeout(() => {
+    callAlarmActive.value = false
+    callAlarmTimeout = null
+    updateSystemMessage()
+  }, CALL_ALARM_HOLD_MS)
+}
+
+const clearCallAlarm = () => {
+  const wasActive = callAlarmActive.value
+  callAlarmActive.value = false
+  if (callAlarmTimeout !== null) {
+    clearTimeout(callAlarmTimeout)
+    callAlarmTimeout = null
+  }
+  if (wasActive) {
+    speak('警报解除，人员已获救')
+  }
+}
+
+const updateSystemMessage = () => {
+  if (pressureStatus.value === 1) {
+    systemMessage.value = 'SAFE: 救生圈压力传感器已触发，人员已抓靠，警报解除！'
+  } else if (callAlarmActive.value) {
+    systemMessage.value = '⚠️ WARNING: 侦测到呼救！请立即处理！'
+  } else if (isAlarm.value === 1) {
+    systemMessage.value = '⚠️ WARNING: 侦测到异常！溺水人数: ' + drowningCount.value + '，呼救信号: ' + (heardCallCount.value > 0 ? '有' : '无')
+  } else {
+    systemMessage.value = 'NORMAL: 监控中心待命中，当前水面安全。'
+  }
+}
+
+const fetchLiveStatus = () => {
+  uni.request({
+    url: API_URL,
+    method: 'GET',
+    data: { deviceId: deviceId.value },
+    success: (res) => {
+      if (res.statusCode === 200 && res.data != null) {
+        const data = res.data
+
+        console.log('原始数据:', JSON.stringify(data))
+
+        currentFrame.value   = parseInt(data['frameNo']       || 0)
+        drowningCount.value  = parseInt(data['drowningCount'] || 0)
+        heardCallCount.value = parseInt(data['callForHelp']   || 0)
+        pressureStatus.value = parseInt(data['pressure']      || 0)
+        isAlarm.value        = parseInt(data['alarm']         || 0)
+
+        // 视觉报警：从无到有时播报
+        const visionNow = drowningCount.value > 0 && pressureStatus.value !== 1
+        if (visionNow && !lastVisionState) {
+          speak('警告！视觉模块发现' + drowningCount.value + '名疑似溺水目标！')
+        }
+        lastVisionState = visionNow
+
+        // 呼救报警：跟之前能用的版本一致
+        if (pressureStatus.value === 1) {
+          clearCallAlarm()
+        } else if (heardCallCount.value > 0) {
+          // 第一次触发时播报语音
+          if (!callAlarmActive.value) {
+            speak('警告！侦测到呼救信号，请立即处理！')
+          }
+          activateCallAlarm()
+        }
+
+        updateSystemMessage()
+
+      } else {
+        systemMessage.value = '服务器返回异常状态: ' + res.statusCode
+        console.error('Fetch error:', res)
+      }
+    },
+    fail: (err) => {
+      systemMessage.value = '❌ 服务器连接失败，请检查网络或后端服务'
+      console.error('Fetch error:', err)
+    }
+  })
+}
+
+onMounted(() => {
+  fetchLiveStatus()
+  timer = setInterval(fetchLiveStatus, 500)
+})
+
+onUnmounted(() => {
+  if (timer !== null) {
+    clearInterval(timer)
+    timer = null
+  }
+  clearCallAlarm()
+})
+</script>
+
+
+
+
+<style scoped>
+/* ── 页面大视窗基底（清爽温润的马卡龙奶油底色） ── */
+.page-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  background-color: #F5F7FA;
+  overflow: hidden;
+}
+
+/* ── 马卡龙梦幻柔光背景层 ── */
+.bg-glow {
+  position: absolute;
+  border-radius: 500px;
+  opacity: 0.45;
+}
+.bg-blue {
+  width: 500px;
+  height: 500px;
+  background-color: #D6E6F2; /* 海盐浅蓝 */
+  top: -100px;
+  left: -100px;
+}
+.bg-pink {
+  width: 450px;
+  height: 450px;
+  background-color: #F7E2E2; /* 蜜桃淡粉 */
+  bottom: -50px;
+  right: -100px;
+}
+
+/* ── 主内容脚手架 ── */
+.main-content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+/* ── 顶部优雅标题 ── */
+.header-section {
+  margin-top: 40px;
+  margin-bottom: 24px;
+}
+.brand-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #2C3E50;
+  letter-spacing: 2px;
+}
+.brand-subtitle {
+  font-size: 13px;
+  color: #7F8C8D;
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+
+/* ── 核心毛玻璃质感容器卡片（修改：自适应紧凑高度） ── */
+.glass-card {
+  background-color: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 28px;
+  padding: 20px;
+  box-shadow: 0 16px 40px rgba(142, 154, 175, 0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 顶部业务状态横条 ── */
+.status-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background-color: #E8F6EF; /* 默认薄荷浅绿 */
+  padding: 12px 16px;
+  border-radius: 16px;
+}
+.status-bar-alert {
+  background-color: #FFF0F0; /* 报警樱花淡红 */
+}
+.status-bar-safe {
+  background-color: #E3F2FD; /* 已获救安全马卡龙蓝 */
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #2ECC71;
+  border-radius: 50%;
+  margin-right: 12px;
+}
+.status-bar-alert .status-dot {
+  background-color: #E74C3C;
+}
+.status-bar-safe .status-dot {
+  background-color: #3498DB;
+}
+.status-msg-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2C3E50;
+  flex: 1;
+}
+
+.card-divider {
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.04);
+  margin: 20px 0;
+}
+
+/* ── 模块双网格 ── */
+.modules-grid {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+}
+.module-item {
+  width: 48%;
+  background-color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 20px;
+  padding: 16px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+/* 声音激活：蜜桃红衬底 */
+.module-item-active-sound {
+  background-color: #FFF0F2;
+  border: 1px solid #FFD3DA;
+}
+/* 视觉激活：香芋紫/熏衣蓝衬底 */
+.module-item-active-vision {
+  background-color: #F0F4FF;
+  border: 1px solid #D2E0FF;
+}
+.module-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.module-icon {
+  font-size: 20px;
+  margin-right: 6px;
+}
+.module-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #34495E;
+}
+.module-badge {
+  background-color: #F0F3F5;
+  padding: 4px 10px;
+  border-radius: 10px;
+}
+.badge-active-sound { background-color: #FFD3DA; }
+.badge-active-vision { background-color: #D2E0FF; }
+.badge-text {
+  font-size: 12px;
+  color: #7F8C8D;
+}
+.badge-text-active {
+  color: #D9534F;
+  font-weight: bold;
+}
+
+/* ── 底部版权及信息 ── */
+.footer-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: auto; /* 修改：使底部自动贴紧窗口最下方 */
+  padding-bottom: 20px;
+}
+.footer-device-id {
+  font-size: 12px;
+  color: #95A5A6;
+  font-weight: 600;
+}
+.footer-secure-text {
+  font-size: 11px;
+  color: #BDC3C7;
+  margin-top: 4px;
+}
+</style>

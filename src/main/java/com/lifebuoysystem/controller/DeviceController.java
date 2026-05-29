@@ -26,6 +26,8 @@ public class DeviceController {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private final Map<String, Long> lastCallForHelpTime = new ConcurrentHashMap<>();
+
     @Autowired
     private AlarmRecordMapper alarmRecordMapper;
 
@@ -79,6 +81,9 @@ public class DeviceController {
 
            //3. 呼救声弹窗(只推不写库) ============
             if (callForHelp != null && callForHelp > 0) {
+
+                lastCallForHelpTime.put(deviceId, System.currentTimeMillis());
+
                 Map<String, Object> popup = new HashMap<>();
                 popup.put("type", "callForHelp");
                 popup.put("deviceId", deviceId);
@@ -134,10 +139,16 @@ public class DeviceController {
     }
 
     @GetMapping("/latest")
-    public DeviceStatus latest(
-            @RequestParam String deviceId
-    ) {
-
-        return DEVICE_CACHE.get(deviceId);
+    public DeviceStatus latest(@RequestParam String deviceId) {
+        DeviceStatus status = DEVICE_CACHE.get(deviceId);
+        if (status == null) {
+            return null;
+        }
+        // 呼救锁存:最近 15 秒内有过呼救,就持续返回 1
+        Long lastCall = lastCallForHelpTime.get(deviceId);
+        if (lastCall != null && System.currentTimeMillis() - lastCall < 15000) {
+            status.setCallForHelp(1);
+        }
+        return status;
     }
 }
