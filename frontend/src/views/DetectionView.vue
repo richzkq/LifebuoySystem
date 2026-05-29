@@ -27,18 +27,6 @@
           <span class="divider">|</span>
 
           <span>
-            溺水人数: {{ frame.drowningCount ?? '—' }}
-          </span>
-
-          <span class="divider">|</span>
-
-          <span>
-            呼救声: {{ frame.callForHelp ?? '—' }}
-          </span>
-
-          <span class="divider">|</span>
-
-          <span>
             报警: <span :style="{ color: frame.alarm === 1 ? '#EF4444' : '#10B981' }">{{ frame.alarm === 1 ? '有' : '无' }}</span>
           </span>
         </div>
@@ -86,6 +74,15 @@
 
           <div class="section-title">
             实时识别明细
+          </div>
+
+          <div class="drowning-summary">
+            <span>溺水人数:</span>
+            <span
+              :class="{'alarm-active': frame.drowningCount > 0}"
+            >
+              {{ frame.drowningCount ?? 0 }}
+            </span>
           </div>
 
           <div
@@ -259,6 +256,8 @@ import {
   Loading
 } from '@element-plus/icons-vue'
 
+import { ElMessage } from 'element-plus'
+
 const WS_URL =
   `${window.location.protocol}//${window.location.host}/ws`
 
@@ -339,12 +338,16 @@ onMounted(() => {
 
       })
       
-      // 订阅全局报警主题，用于呼救声弹窗（如果需要实时弹窗通知）
+      // 订阅全局报警主题，用于呼救声弹窗
       stompClient.subscribe('/topic/alarm', (msg) => {
         const alarmData = JSON.parse(msg.body)
         console.log('收到实时报警:', alarmData)
-        // TODO: 在这里处理前端的实时报警弹窗逻辑
-        // 例如：ElMessage.warning(alarmData.message)
+        if (alarmData.type === 'callForHelp') {
+          ElMessage.warning({
+            message: alarmData.message,
+            duration: 3000 // 弹窗持续时间3秒
+          })
+        }
       })
 
     },
@@ -651,6 +654,35 @@ const sparkPoints = computed(() =>
 
 .sparkline-wrap {
   padding: 15px;
+}
+
+.drowning-summary {
+  margin-top: -5px;
+  margin-bottom: 15px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.drowning-summary span:first-child {
+  font-weight: bold;
+}
+
+.drowning-summary .alarm-active {
+  color: #EF4444;
+  font-weight: bold;
+  animation: pulse-red 1.5s infinite;
+}
+
+@keyframes pulse-red {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* 设备列表及搜索框样式 */
