@@ -27,7 +27,7 @@
           <span class="divider">|</span>
 
           <span>
-            报警: <span :style="{ color: frame.alarm === 1 ? '#EF4444' : '#10B981' }">{{ frame.alarm === 1 ? '有' : '无' }}</span>
+            报警: <span :style="{ color: frame.alarm === 1 ? '#EF4444' : '#10B981' }">{{ frame.alarm === 1 ? '溺水' : '正常' }}</span>
           </span>
         </div>
       </div>
@@ -344,8 +344,15 @@ onMounted(() => {
         console.log('收到实时报警:', alarmData)
         if (alarmData.type === 'callForHelp') {
           ElMessage.warning({
-            message: alarmData.message,
-            duration: 3000 // 弹窗持续时间3秒
+            dangerouslyUseHTMLString: true, // 允许使用 HTML 字符串
+            message: `<div>
+                        <p style="margin: 0; font-size: 16px; font-weight: bold;">🚨 呼救声报警！</p>
+                        <p style="margin: 5px 0 0; font-size: 14px;">${alarmData.message}</p>
+                        <p style="margin: 5px 0 0; font-size: 12px; color: #909399;">${new Date().toLocaleString()}</p>
+                      </div>`,
+            duration: 0, // 持续时间0，表示不自动关闭，需要手动关闭
+            showClose: true, // 显示关闭按钮
+            customClass: 'large-alarm-message' // 添加自定义类名
           })
         }
       })
@@ -782,5 +789,26 @@ const sparkPoints = computed(() =>
 
 ::-webkit-scrollbar-thumb {
   background: rgba(255,255,255,0.2);
+}
+
+/* Element Plus 消息弹窗自定义样式 */
+:global(.el-message.large-alarm-message) {
+  min-width: 380px !important; /* 调整最小宽度 */
+  padding: 15px 20px !important; /* 调整内边距 */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  border-radius: 8px !important;
+  border: 1px solid #e6a23c !important; /* 警告色边框 */
+  background-color: rgba(253, 246, 236, 0.95) !important; /* 警告色背景 */
+}
+
+:global(.el-message.large-alarm-message .el-message__content) {
+  font-size: 14px !important; /* 调整内容字体大小 */
+  color: #606266 !important;
+}
+
+:global(.el-message.large-alarm-message .el-message__closeBtn) {
+  top: 18px !important;
+  font-size: 16px !important;
+  color: #606266 !important;
 }
 </style>
