@@ -78,6 +78,18 @@
             <version>3.0.4</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- ============ MQTT: Embedded Broker + Client ============ -->
+        <dependency>
+            <groupId>io.moquette</groupId>
+            <artifactId>moquette-broker</artifactId>
+            <version>0.17</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.paho</groupId>
+            <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
+            <version>1.2.5</version>
+        </dependency>
     </dependencies>
 
     <build>

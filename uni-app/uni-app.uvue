@@ -115,7 +115,7 @@ const clearCallAlarm = () => {
 const updateSystemMessage = () => {
   if (pressureStatus.value === 1) {
     systemMessage.value = 'SAFE: 救生圈压力传感器已触发，人员已抓靠，警报解除！'
-  } else if (callAlarmActive.value) {
+  } else if (heardCallCount.value > 0) {
     systemMessage.value = '⚠️ WARNING: 侦测到呼救！请立即处理！'
   } else if (isAlarm.value === 1) {
     systemMessage.value = '⚠️ WARNING: 侦测到异常！溺水人数: ' + drowningCount.value + '，呼救信号: ' + (heardCallCount.value > 0 ? '有' : '无')
@@ -130,6 +130,7 @@ const fetchLiveStatus = () => {
     method: 'GET',
     data: { deviceId: deviceId.value },
     success: (res) => {
+
       if (res.statusCode === 200 && res.data != null) {
         const data = res.data
 
@@ -175,7 +176,7 @@ const fetchLiveStatus = () => {
 
 onMounted(() => {
   fetchLiveStatus()
-  timer = setInterval(fetchLiveStatus, 500)
+  timer = setInterval(fetchLiveStatus, 400)
 })
 
 onUnmounted(() => {

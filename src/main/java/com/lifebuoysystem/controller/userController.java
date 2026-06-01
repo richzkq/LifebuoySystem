@@ -2,42 +2,32 @@ package com.lifebuoysystem.controller;
 
 import com.lifebuoysystem.common.result;
 import com.lifebuoysystem.entity.User;
-import com.lifebuoysystem.mapper.userMapper;
-import com.lifebuoysystem.utils.jwtUtils;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.lifebuoysystem.service.UserService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 /**
  * @author zkq
  */
-
 @RestController
 @RequestMapping("/user")
+@RequiredArgsConstructor
 public class userController {
 
-    @Autowired
-    private userMapper userMapper;
+    private final UserService userService;
 
     @PostMapping("/login")
-    public result login(@RequestBody User user){
-
-        User dbUser = userMapper.findByUsername(user.getUsername());
-
-        if(dbUser == null){
-            return result.error("用户不存在");
+    public result login(@RequestBody User user) {
+        try {
+            String token = userService.login(user.getUsername(), user.getPassword());
+            return result.success(token);
+        } catch (RuntimeException e) {
+            return result.error(e.getMessage());
         }
-
-        if(!dbUser.getPassword().equals(user.getPassword())){
-            return result.error("密码错误");
-        }
-
-        String token = jwtUtils.createToken(dbUser.getId(),dbUser.getUsername());
-        return result.success(token);
     }
 
     @GetMapping("/info")
-    public result info(){
+    public result info() {
         return result.success("登录成功.......");
     }
-
 }

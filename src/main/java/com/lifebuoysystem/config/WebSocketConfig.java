@@ -1,31 +1,48 @@
 package com.lifebuoysystem.config;
 
-
+import com.lifebuoysystem.handler.FrameWebSocketHandler;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.*;
 
 /**
+ * WebSocket 配置
+ * <ul>
+ *   <li>/ws       — STOMP over SockJS (前端监控页面实时数据)</li>
+ *   <li>/ws-frame — 原生 WebSocket (RK3588 image_pusher.py Base64 推流)</li>
+ * </ul>
+ *
  * @author ZKQ
  */
-
 @Configuration
 @EnableWebSocketMessageBroker
-public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
+@EnableWebSocket
+@RequiredArgsConstructor
+public class WebSocketConfig implements WebSocketMessageBrokerConfigurer, WebSocketConfigurer {
+
+    private final FrameWebSocketHandler frameWebSocketHandler;
+
+    // ==================== STOMP 端点 ====================
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // 后端向前端推送的主题前缀
         registry.enableSimpleBroker("/topic");
-        // 前端发向后端的前缀（本项目前端只接收，暂不需要，保留备用）
         registry.setApplicationDestinationPrefixes("/app");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // WebSocket 握手端点，allowedOriginPatterns("*") 开发期跨域
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("*")
-                .withSockJS();   // 兼容不支持原生 WS 的浏览器
+                .withSockJS();
+    }
+
+    // ==================== 原生 WebSocket 端点 (RK3588 推流) ====================
+
+    @Override
+    public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
+        registry.addHandler(frameWebSocketHandler, "/ws-frame")
+                .setAllowedOriginPatterns("*");
     }
 }

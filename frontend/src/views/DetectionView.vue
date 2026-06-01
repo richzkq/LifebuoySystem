@@ -29,6 +29,10 @@
           <span>
             报警: <span :style="{ color: frame.alarm === 1 ? '#EF4444' : '#10B981' }">{{ frame.alarm === 1 ? '溺水' : '正常' }}</span>
           </span>
+
+          <span class="divider">|</span>
+
+          <button class="logout-btn" @click="handleLogout">退出</button>
         </div>
       </div>
     </header>
@@ -39,7 +43,7 @@
 
         <div class="canvas-wrap">
 
-          <img id="monitorImage" src="http://47.83.199.93:8080/device/stream/rocket001"
+          <img id="monitorImage" :src="streamUrl"
                alt="监控画面" style="width:100%;" />
 
           <div v-if="!connected" class="overlay-status">
@@ -136,7 +140,14 @@
           </div>
 
           <div
-            v-if="alarms.length === 0"
+            v-if="alarmLoading"
+            class="empty"
+          >
+            加载中...
+          </div>
+
+          <div
+            v-else-if="alarms.length === 0"
             class="empty"
           >
             暂无报警记录
@@ -216,21 +227,10 @@
 
           <div class="device-item glass-item">
             <div class="device-info-row">
-              <span class="device-id-tag">ID: 001</span>
+              <span class="device-id-tag">{{ deviceId }}</span>
               <span class="device-online-status">
-                <i class="status-indicator"></i> 已连接
+                <i class="status-indicator"></i> {{ connected ? '已连接' : '未连接' }}
               </span>
-            </div>
-            
-            <div class="device-detail">
-              <div class="detail-line">
-                <span class="detail-label">名称:</span>
-                <span class="detail-value">rocket001</span>
-              </div>
-              <div class="detail-line">
-                <span class="detail-label">密钥:</span>
-                <span class="detail-value mono-text">LB-SEA-0001-ALPHA</span>
-              </div>
             </div>
           </div>
         </div>
@@ -242,218 +242,85 @@
 </template>
 
 <script setup>
-import {
-  ref,
-  computed,
-  onMounted,
-  onUnmounted
-} from 'vue'
-
-import { Client } from '@stomp/stompjs'
-import SockJS from 'sockjs-client'
-
-import {
-  Loading
-} from '@element-plus/icons-vue'
-
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { useAuthStore } from '@/stores/auth'
+import { useWebSocket } from '@/composables/useWebSocket'
+import { getAlarmList } from '@/api/alarm'
+import { getStreamUrl } from '@/api/device'
+import { DEFAULT_DEVICE_ID, UI } from '@/config'
 
-const WS_URL =
-  `${window.location.protocol}//${window.location.host}/ws`
+const router = useRouter()
+const authStore = useAuthStore()
 
-const connected = ref(false)
+// ============ 设备 ID ============
+const deviceId = ref(DEFAULT_DEVICE_ID)
 
-const currentDeviceId = ref('rocket001') // 默认设备ID
+// ============ WebSocket 实时数据 ============
+const { connected, frame, connect } = useWebSocket(deviceId)
 
-const frame = ref({
-  deviceId: null,
-  frameNo: null,
-  drowningCount: 0,
-  personCount: 0,
-  callForHelp: 0,
-  pressure: 0,
-  alarm: 0,
-  targets: []
-})
+// ============ MJPEG 流地址 ============
+const streamUrl = computed(() => getStreamUrl(deviceId.value))
 
+// ============ 报警记录 ============
 const alarms = ref([])
-
-const imgRef = ref(null)
-
-const history = ref([])
-
-const imgTimestamp = ref(Date.now())
-
-let stompClient = null
-let lastPressure = 0
-
-onMounted(() => {
-
-  fetchAlarmList()
-
-  // 从监控图片中提取 deviceId
-  const imgElement = document.getElementById('monitorImage')
-  if (imgElement && imgElement.src) {
-    try {
-      const url = new URL(imgElement.src)
-      const pathParts = url.pathname.split('/')
-      // 预期路径格式: /device/stream/{deviceId}
-      if (pathParts.length >= 4 && pathParts[pathParts.length - 2] === 'stream') {
-        currentDeviceId.value = pathParts[pathParts.length - 1]
-        console.log('从图片URL中提取到设备ID:', currentDeviceId.value)
-      }
-    } catch (e) {
-      console.error('解析图片URL中的设备ID失败:', e)
-    }
-  }
-
-  stompClient = new Client({
-
-    webSocketFactory: () => new SockJS(WS_URL),
-
-    reconnectDelay: 3000,
-
-    onConnect: () => {
-
-      connected.value = true
-      console.log('WebSocket 已连接')
-
-      // 订阅设备特定的主题
-      stompClient.subscribe('/topic/frames/' + currentDeviceId.value, (msg) => {
-
-        const data = JSON.parse(msg.body)
-        console.log('收到实时数据:', data)
-        frame.value = data
-
-        if (data.pressure === 1 && lastPressure !== 1) {
-          ElMessage.success({
-            message: '救援结束',
-            duration: 3000,
-            showClose: true
-          })
-        }
-        lastPressure = data.pressure ?? 0
-
-        imgTimestamp.value = Date.now()
-
-
-        imgTimestamp.value = Date.now()
-
-        history.value.push({
-          frameNo: data.frameNo,
-          count: data.personCount ?? 0 // 使用 personCount 作为统计数量
-        })
-
-        if (history.value.length > 15) {
-          history.value.shift()
-        }
-
-      })
-      
-      // 订阅全局报警主题，用于呼救声弹窗
-      stompClient.subscribe('/topic/alarm', (msg) => {
-        const alarmData = JSON.parse(msg.body)
-        console.log('收到实时报警:', alarmData)
-        if (alarmData.type === 'callForHelp') {
-          ElMessage.error({
-            dangerouslyUseHTMLString: true,
-            message: `
-            <div class="glass-alarm-box">
-              <div class="glass-alarm-header">
-                <span class="glass-alarm-dot"></span>
-                <span class="glass-alarm-title"></span>
-              </div>
-              <div class="glass-alarm-content">
-                ${alarmData.message || '未知设备触发'}
-              </div>
-              <div class="glass-alarm-time">
-                ${new Date().toLocaleTimeString()}
-              </div>
-            </div>
-          `,
-            duration: 0,
-            showClose: true,
-            customClass: 'glass-alarm-message' // 绑定专属类名
-          })
-        }
-      })
-
-    },
-
-    onDisconnect: () => {
-      connected.value = false
-      console.log('WebSocket 已断开')
-    }
-  })
-
-  stompClient.activate()
-})
-
-onUnmounted(() => {
-  stompClient?.deactivate()
-})
-
-function imageUrl(url) {
-
-  if (!url) return ''
-
-  return `${url}?t=${imgTimestamp.value}`
-}
+const alarmLoading = ref(false)
 
 async function fetchAlarmList() {
-
+  alarmLoading.value = true
   try {
-
-    const res =
-      await fetch('/api/alarm/list')
-
-    alarms.value =
-      await res.json()
-
+    const res = await getAlarmList()
+    alarms.value = res.data
   } catch (e) {
-
-    console.error(
-      '报警列表获取失败',
-      e
-    )
+    console.error('报警列表获取失败', e)
+    ElMessage.error('报警列表加载失败')
+  } finally {
+    alarmLoading.value = false
   }
 }
 
-function onImageLoad() {}
-
-function scoreColor(score) {
-  return '#10B981'
+// ============ 退出登录 ============
+function handleLogout() {
+  authStore.logout()
+  router.replace('/login')
 }
 
+// ============ 折线图数据 ============
+const history = ref([])
+
+// 每次收到新帧后更新历史
+import { watch } from 'vue'
+watch(
+  () => frame.value.frameNo,
+  (newFrameNo) => {
+    if (newFrameNo != null) {
+      history.value.push({
+        frameNo: newFrameNo,
+        count: frame.value.personCount ?? 0,
+      })
+      if (history.value.length > UI.HISTORY_MAX) {
+        history.value.shift()
+      }
+    }
+  }
+)
+
 const sparkRaw = computed(() => {
-
-  const list = history.value.slice(-15)
-
+  const list = history.value.slice(-UI.HISTORY_MAX)
   if (!list.length) {
     return []
   }
 
-  const max =
-    Math.max(
-      ...list.map(h => h.count),
-      1
-    )
-
+  const max = Math.max(...list.map(h => h.count), 1)
   const W = 260
   const H = 55
   const PAD = 5
 
   return list.map((h, i) => ({
-    x:
-      PAD +
-      (i / Math.max(list.length - 1, 1))
-      * (W - PAD * 2),
-
-    y:
-      H -
-      PAD -
-      (h.count / max)
-      * (H - PAD * 2),
+    x: PAD + (i / Math.max(list.length - 1, 1)) * (W - PAD * 2),
+    y: H - PAD - (h.count / max) * (H - PAD * 2),
   }))
 })
 
@@ -462,6 +329,19 @@ const sparkPoints = computed(() =>
     .map(p => `${p.x},${p.y}`)
     .join(' ')
 )
+
+// ============ 辅助方法 ============
+function scoreColor(score) {
+  if (score >= 0.8) return '#EF4444'
+  if (score >= 0.5) return '#F59E0B'
+  return '#10B981'
+}
+
+// ============ 生命周期 ============
+onMounted(() => {
+  fetchAlarmList()
+  connect()
+})
 </script>
 
 <style scoped>
@@ -519,6 +399,7 @@ const sparkPoints = computed(() =>
   display: flex;
   gap: 12px;
   font-size: 12px;
+  align-items: center;
 }
 
 .dot {
@@ -533,6 +414,20 @@ const sparkPoints = computed(() =>
 
 .dot--off {
   background: #EF4444;
+}
+
+.logout-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 4px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.logout-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #EF4444;
 }
 
 .main {

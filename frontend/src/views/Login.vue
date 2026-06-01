@@ -14,17 +14,17 @@
         <p class="subtitle">web监控平台</p>
       </div>
 
-      <el-form 
-        ref="loginFormRef" 
-        :model="loginForm" 
-        :rules="rules" 
+      <el-form
+        ref="loginFormRef"
+        :model="loginForm"
+        :rules="rules"
         class="login-form"
       >
         <el-form-item prop="username">
           <div class="input-container">
-            <el-input 
-              v-model="loginForm.username" 
-              placeholder="管理员账号" 
+            <el-input
+              v-model="loginForm.username"
+              placeholder="管理员账号"
               :prefix-icon="User"
               class="custom-input"
             />
@@ -33,10 +33,10 @@
 
         <el-form-item prop="password">
           <div class="input-container">
-            <el-input 
-              v-model="loginForm.password" 
-              type="password" 
-              placeholder="密码" 
+            <el-input
+              v-model="loginForm.password"
+              type="password"
+              placeholder="密码"
               :prefix-icon="Lock"
               show-password
               class="custom-input"
@@ -51,9 +51,9 @@
         </div>
 
         <el-form-item>
-          <button 
-            type="button" 
-            class="action-btn" 
+          <button
+            type="button"
+            class="action-btn"
             :disabled="loading"
             @click="handleLogin"
           >
@@ -75,63 +75,50 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { User, Lock, Platform, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
-import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const loginFormRef = ref(null)
 const loading = ref(false)
 const rememberMe = ref(false)
 
+// 已登录则直接跳转
+onMounted(() => {
+  if (authStore.isAuthenticated) {
+    router.replace('/detection')
+  }
+})
+
 const loginForm = reactive({
   username: '',
-  password: ''
+  password: '',
 })
 
 const rules = reactive({
   username: [{ required: true, message: '请输入管理员账号', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入访问密钥', trigger: 'blur' }]
-})
-
-const request = axios.create({
-  baseURL: '/api', 
-  timeout: 5000
-})
-request.interceptors.request.use(config => {
-
-  const token = localStorage.getItem('token')
-
-  if (token) {
-    config.headers.token = token
-  }
-
-  return config
+  password: [{ required: true, message: '请输入访问密钥', trigger: 'blur' }],
 })
 
 const handleLogin = async () => {
   if (!loginFormRef.value) return
-  
+
   await loginFormRef.value.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        const response = await request.post('/user/login', loginForm)
-        const res = response.data
-        if (res.code === 200) {
-          ElMessage.success('身份验证成功')
-          localStorage.setItem('token', res.data)
-          router.push('/detection')
-        } else {
-          ElMessage.error(res.msg || '凭据错误')
-        }
-      } catch (error) {
-        ElMessage.error('无法连接到服务器')
-      } finally {
-        loading.value = false
-      }
+    if (!valid) return
+
+    loading.value = true
+    try {
+      await authStore.login(loginForm.username, loginForm.password)
+      ElMessage.success('身份验证成功')
+      router.push('/detection')
+    } catch (error) {
+      ElMessage.error(error.message || '登录失败')
+    } finally {
+      loading.value = false
     }
   })
 }
@@ -149,8 +136,8 @@ const handleLogin = async () => {
   width: 100vw;
   height: 100vh;
   display: flex;
-  justify-content: flex-end; 
-  padding-right: 15%; 
+  justify-content: flex-end;
+  padding-right: 15%;
   align-items: center;
   background: url('../assets/backgroundImage.png') no-repeat center center;
   background-size: cover;
@@ -181,21 +168,21 @@ const handleLogin = async () => {
 .glass-card {
   position: relative;
   z-index: 10;
-  width: 280px; /* 进一步瘦身(v2) */   
+  width: 280px; /* 进一步瘦身(v2) */
   padding: 40px 35px;
   /* 修改2：更清透的背景 + 超大模糊值 */
-  background: rgba(255, 255, 255, 0.08); 
+  background: rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(40px) saturate(180%);
   -webkit-backdrop-filter: blur(40px) saturate(180%);
-  
+
   border-radius: 35px;
   /* 修改3：边缘晕染感，细线边框 + 柔光阴影 */
   border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 
+  box-shadow:
     0 25px 50px rgba(0, 0, 0, 0.15),            /* 基础深色阴影 */
     0 0 30px rgba(255, 255, 255, 0.1),         /* 内部光晕 */
     inset 0 0 2px rgba(255, 255, 255, 0.4);    /* 边缘高光线 */
-  
+
   text-align: center;
   transition: all 0.5s ease;
 }

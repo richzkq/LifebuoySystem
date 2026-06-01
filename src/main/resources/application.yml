@@ -28,3 +28,15 @@ deepseek:
 mybatis:
   configuration:
     map-underscore-to-camel-case: true
+
+# ============ MQTT Broker (Embedded Moquette) ============
+mqtt:
+  broker:
+    port: 1883
+    host: 0.0.0.0
+
+# ============ 舵机 / 救生圈释放 ============
+servo:
+  consecutive-threshold: 5      # 连续 N 帧检测到溺水才触发舵机
+  cooldown-ms: 30000            # 两次触发之间的冷却时间 (毫秒)
+  mqtt-topic-prefix: "lifebuoy/servo"
