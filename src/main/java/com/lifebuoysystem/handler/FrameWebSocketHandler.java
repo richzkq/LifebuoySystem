@@ -27,6 +27,7 @@ import java.nio.ByteBuffer;
 public class FrameWebSocketHandler extends BinaryWebSocketHandler {
 
     private final FrameService frameService;
+    private final BrowserFrameHandler browserFrameHandler;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -56,6 +57,10 @@ public class FrameWebSocketHandler extends BinaryWebSocketHandler {
             }
 
             frameService.storeFrame(deviceId, jpgBytes);
+
+            // 同时直接推送给浏览器（零延迟，跳过 MJPEG/Nginx/HTTP multipart）
+            browserFrameHandler.broadcast(deviceId, jpgBytes);
+
             log.debug("帧已接收 deviceId={} size={}KB", deviceId, jpgBytes.length / 1024);
         } catch (Exception e) {
             log.error("二进制帧解析失败: {}", e.getMessage());

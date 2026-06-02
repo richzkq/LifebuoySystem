@@ -1,5 +1,6 @@
 package com.lifebuoysystem.config;
 
+import com.lifebuoysystem.handler.BrowserFrameHandler;
 import com.lifebuoysystem.handler.FrameWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +25,7 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer, WebSocketConfigurer {
 
     private final FrameWebSocketHandler frameWebSocketHandler;
+    private final BrowserFrameHandler browserFrameHandler;
 
     // ==================== STOMP 端点 ====================
 
@@ -45,6 +47,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer, WebSoc
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(frameWebSocketHandler, "/ws-frame")
+                .setAllowedOriginPatterns("*");
+
+        // 浏览器直连帧推送（替代 MJPEG <img>，零延迟）
+        registry.addHandler(browserFrameHandler, "/ws-browser-frame")
                 .setAllowedOriginPatterns("*");
     }
 

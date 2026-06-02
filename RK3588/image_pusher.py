@@ -23,13 +23,20 @@ WS_PUSH_URL = (
     f"/ws-frame"
 )
 DEVICE_ID   = config["device_id"]
-FRAME_DIR   = "/home/elf/demo/make/frames_int8_pixel_box"
+
+# 核心优化：帧目录放内存盘 /dev/shm，消除磁盘 IO 延迟
+# 旧路径：/home/elf/demo/make/frames_int8_pixel_box
+# 如果 AI 模型还是写旧路径，用这行软链接：
+#   ln -s /dev/shm/frames_int8_pixel_box /home/elf/demo/make/frames_int8_pixel_box
+FRAME_DIR   = "/dev/shm/frames_int8_pixel_box"
+
 KEEP_RECENT = 10
+QUEUE_SIZE  = 3  # 小队列 = 低延迟
 
-logger.info("WS推流地址: %s", WS_PUSH_URL)
+new_frame_queue = queue.Queue(maxsize=QUEUE_SIZE)
 
-# 只保留最新1帧
-new_frame_queue = queue.Queue(maxsize=1)
+# 确保目录存在
+os.makedirs(FRAME_DIR, exist_ok=True)
 
 
 # =========================================================
@@ -45,119 +52,61 @@ def clean_old_frames():
         if len(files) <= KEEP_RECENT:
             return
         files.sort(key=os.path.getmtime)
-        deleted = 0
         for f in files[:-KEEP_RECENT]:
             try:
                 os.remove(f)
-                deleted += 1
             except OSError:
                 pass
-        if deleted:
-            logger.info("清理旧帧 %d 张", deleted)
+        if len(files) - KEEP_RECENT > 0:
+            logger.debug("清理旧帧 %d 张", len(files) - KEEP_RECENT)
     except Exception as e:
         logger.error("清理失败: %s", e)
 
 
 # =========================================================
-# 动态等待文件写入完成
-# 间隔从 5ms 开始，逐步增大
-# 文件大小连续两次相同即认为写入完成
+# 读取 JPEG + 构建二进制帧
+# 内存盘上文件写完即完整，无需等待
 # =========================================================
-async def wait_file_complete(path, max_wait_ms=200):
-    max_wait  = max_wait_ms / 1000
-    elapsed   = 0
-    last_size = -1
-
-    # 动态间隔：5ms → 10ms → 20ms → 20ms → ...
-    # 文件写得快时，5ms 就能检测到稳定，延迟最小
-    intervals = [0.005, 0.010, 0.020, 0.020, 0.020,
-                 0.020, 0.020, 0.020, 0.020, 0.020]
-
-    for interval in intervals:
-        await asyncio.sleep(interval)
-        elapsed += interval
-
-        try:
-            size = os.path.getsize(path)
-        except OSError:
-            # 文件被删了
-            return False
-
-        if size > 0 and size == last_size:
-            # 文件大小稳定，写入完成
-            logger.debug(
-                "文件写入完成 %s size=%d elapsed=%.0fms",
-                os.path.basename(path), size, elapsed * 1000
-            )
-            return True
-
-        last_size = size
-
-        if elapsed >= max_wait:
-            logger.warning(
-                "等待写入超时 %s elapsed=%.0fms last_size=%d",
-                os.path.basename(path), elapsed * 1000, last_size
-            )
-            break
-
-    # 超时但有内容，仍然尝试推送
-    return last_size > 0
-
-
-# =========================================================
-# 读取原始 JPEG 字节 (不放线程池，拼接时直接用)
-# =========================================================
-def read_raw(path):
-    with open(path, "rb") as f:
-        data = f.read()
-    return data if len(data) > 0 else None
-
-# =========================================================
-# 构建二进制帧: 4字节deviceId长度 + deviceId + JPEG
-# =========================================================
-def build_binary_frame(device_id, jpg_bytes):
-    dev_bytes = device_id.encode("utf-8")
-    header = struct.pack(">I", len(dev_bytes))   # 大端 uint32
-    return header + dev_bytes + jpg_bytes
+def read_and_pack(path):
+    try:
+        with open(path, "rb") as f:
+            jpg = f.read()
+        if len(jpg) == 0:
+            return None
+        dev_bytes = DEVICE_ID.encode("utf-8")
+        header = struct.pack(">I", len(dev_bytes))
+        return header + dev_bytes + jpg
+    except OSError:
+        return None
 
 
 # =========================================================
 # 文件监听协程
-# watchfiles 底层用 Rust inotify，批量合并事件
-# 同一文件多次写入只触发一次
 # =========================================================
 async def file_watcher():
-    logger.info("文件监听启动，监听目录: %s", FRAME_DIR)
+    logger.info("文件监听启动，目录: %s (内存盘)", FRAME_DIR)
 
     async for changes in awatch(FRAME_DIR):
         for change_type, path in changes:
-
-            # 只处理新建和修改，忽略删除
             if change_type not in (Change.added, Change.modified):
                 continue
-
             if not path.endswith(".jpg"):
                 continue
 
-            # 等文件写入完成
-            ok = await wait_file_complete(path)
-            if not ok:
-                logger.warning(
-                    "文件不可用，跳过: %s",
-                    os.path.basename(path)
-                )
-                continue
-
-            # 只保留最新帧，丢弃积压的旧帧
-            while not new_frame_queue.empty():
-                try:
-                    new_frame_queue.get_nowait()
-                except queue.Empty:
-                    break
+            # 内存盘：文件写完即完整，直接入队无需等待
+            # 队列满时丢弃最旧的帧（不阻塞）
             try:
                 new_frame_queue.put_nowait(path)
             except queue.Full:
-                pass
+                try:
+                    old = new_frame_queue.get_nowait()
+                    new_frame_queue.task_done()
+                except queue.Empty:
+                    pass
+                try:
+                    new_frame_queue.put_nowait(path)
+                except queue.Full:
+                    pass
 
 
 # =========================================================
@@ -165,6 +114,7 @@ async def file_watcher():
 # =========================================================
 async def push_loop():
     clean_counter = 0
+    loop = asyncio.get_running_loop()
 
     while True:
         try:
@@ -172,21 +122,19 @@ async def push_loop():
                 WS_PUSH_URL,
                 ping_interval=20,
                 ping_timeout=10,
-                max_size=10 * 1024 * 1024,
+                max_size=512 * 1024,   # 512KB
             ) as ws:
                 logger.info("WS推流连接成功")
 
                 while True:
-
-                    # 阻塞等待新帧，无新帧完全休眠不占 CPU
+                    # 等新帧
                     try:
-                        loop = asyncio.get_running_loop()
                         path = await loop.run_in_executor(
                             None,
                             lambda: new_frame_queue.get(timeout=2)
                         )
                     except Exception:
-                        # 2秒无新帧，发心跳保活
+                        # 超时无帧，发 ping 保活
                         try:
                             await ws.ping()
                         except Exception:
@@ -197,53 +145,34 @@ async def push_loop():
                         continue
 
                     try:
-                        # 读取原始 JPEG → 构建二进制帧
-                        loop = asyncio.get_running_loop()
-                        jpg_bytes = await loop.run_in_executor(
-                            None,
-                            read_raw,
-                            path
-                        )
-
-                        if jpg_bytes is None or len(jpg_bytes) == 0:
-                            logger.warning(
-                                "空文件跳过: %s",
-                                os.path.basename(path)
-                            )
+                        # 读文件 + 打包放线程池（内存盘读取 < 1ms）
+                        payload = await loop.run_in_executor(None, read_and_pack, path)
+                        if payload is None:
+                            logger.warning("空文件跳过: %s", os.path.basename(path))
                             continue
 
-                        # 二进制帧: header + deviceId + raw JPEG
-                        payload = build_binary_frame(DEVICE_ID, jpg_bytes)
                         await ws.send(payload)
-
-                        logger.info(
-                            "推图成功 %s (%.1fKB)",
-                            os.path.basename(path),
-                            len(payload) / 1024
-                        )
+                        logger.info("推图成功 %s (%.1fKB)",
+                                     os.path.basename(path), len(payload) / 1024)
 
                         clean_counter += 1
-                        if clean_counter >= 20:
-                            loop = asyncio.get_running_loop()
-                            await loop.run_in_executor(
-                                None,
-                                clean_old_frames
-                            )
+                        if clean_counter >= 100:
+                            await loop.run_in_executor(None, clean_old_frames)
                             clean_counter = 0
 
                     except websockets.ConnectionClosed:
-                        logger.warning("WS连接已关闭，准备重连")
+                        logger.warning("WS断开，重连...")
                         break
                     except Exception as e:
                         logger.error("推图异常: %s", e)
 
         except Exception as e:
-            logger.error("WS断开: %s，3秒后重连", e)
+            logger.error("WS连接失败: %s，3秒后重试", e)
             await asyncio.sleep(3)
 
 
 # =========================================================
-# 启动：监听和推流并发运行
+# 启动
 # =========================================================
 async def main():
     await asyncio.gather(

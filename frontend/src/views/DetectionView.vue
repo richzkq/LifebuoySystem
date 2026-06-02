@@ -43,7 +43,7 @@
 
         <div class="canvas-wrap">
 
-          <img id="monitorImage" :src="streamUrl"
+          <img id="monitorImage" :src="frameUrl"
                alt="监控画面" style="width:100%;" />
 
           <div v-if="!connected" class="overlay-status">
@@ -249,7 +249,7 @@ import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { getAlarmList } from '@/api/alarm'
-import { getStreamUrl } from '@/api/device'
+import { useFrameStream } from '@/composables/useFrameStream'
 import { DEFAULT_DEVICE_ID, UI } from '@/config'
 
 const router = useRouter()
@@ -261,8 +261,8 @@ const deviceId = ref(DEFAULT_DEVICE_ID)
 // ============ WebSocket 实时数据 ============
 const { connected, frame, connect } = useWebSocket(deviceId)
 
-// ============ MJPEG 流地址 ============
-const streamUrl = computed(() => getStreamUrl(deviceId.value))
+// ============ 浏览器直连帧推送 (替代 MJPEG，零延迟) ============
+const { frameUrl, connect: connectFrameStream } = useFrameStream(deviceId)
 
 // ============ 报警记录 ============
 const alarms = ref([])
@@ -341,6 +341,7 @@ function scoreColor(score) {
 onMounted(() => {
   fetchAlarmList()
   connect()
+  connectFrameStream()
 })
 </script>
 
