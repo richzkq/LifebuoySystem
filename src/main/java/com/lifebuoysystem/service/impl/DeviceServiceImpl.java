@@ -30,6 +30,7 @@ public class DeviceServiceImpl implements DeviceService {
     private final Map<String, DeviceStatus> deviceCache = new ConcurrentHashMap<>();
     private final Map<String, Boolean> lastDrowning = new ConcurrentHashMap<>();
     private final Map<String, Long> lastCallForHelpTime = new ConcurrentHashMap<>();
+    private final Map<String, Long> lastAlarmTime = new ConcurrentHashMap<>();
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -68,6 +69,18 @@ public class DeviceServiceImpl implements DeviceService {
 
             // ============ 2. 实时状态推送（WebSocket） ============
             messagingTemplate.convertAndSend("/topic/frames/" + deviceId, status);
+
+            // ============ 2b. 报警锁存 + WebSocket 弹窗 ============
+            if (alarm != null && alarm > 0) {
+                lastAlarmTime.put(deviceId, System.currentTimeMillis());
+
+                Map<String, Object> alarmPopup = new HashMap<>();
+                alarmPopup.put("type", "drowningAlarm");
+                alarmPopup.put("deviceId", deviceId);
+                alarmPopup.put("timestamp", System.currentTimeMillis());
+                alarmPopup.put("message", "检测到溺水报警!");
+                messagingTemplate.convertAndSend("/topic/alarm", alarmPopup);
+            }
 
             // ============ 3. 呼救声弹窗（只推不写库） ============
             if (callForHelp != null && callForHelp > 0) {
@@ -121,6 +134,11 @@ public class DeviceServiceImpl implements DeviceService {
         Long lastCall = lastCallForHelpTime.get(deviceId);
         if (lastCall != null && System.currentTimeMillis() - lastCall < 30000) {
             status.setCallForHelp(1);
+        }
+        // 报警锁存：最近5秒内有过报警，就持续返回1（uni-app/舵机轮询用）
+        Long lastAlarm = lastAlarmTime.get(deviceId);
+        if (lastAlarm != null && System.currentTimeMillis() - lastAlarm < 5000) {
+            status.setAlarm(1);
         }
         return status;
     }

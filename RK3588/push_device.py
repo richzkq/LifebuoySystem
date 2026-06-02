@@ -2,15 +2,14 @@ import subprocess
 import re
 import os
 import json
-import logging
-from logging.handlers import RotatingFileHandler
 import time
+import logging
 import threading
-import queue
-import asyncio
-import aiohttp
+from logging.handlers import RotatingFileHandler
 
-from concurrent.futures import ThreadPoolExecutor
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # =========================================================
 # 日志
@@ -20,48 +19,41 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(),
-        RotatingFileHandler(
-            "push_device.log",
-            maxBytes=10 * 1024 * 1024,   # 10MB 一个文件
-            backupCount=3,                # 保留最近 3 个
-            encoding="utf-8"
-        )
+        RotatingFileHandler("push_device.log", maxBytes=10*1024*1024, backupCount=3, encoding="utf-8")
     ]
 )
 logger = logging.getLogger(__name__)
 
 # =========================================================
-# 读取配置
+# 配置
 # =========================================================
 with open("IPconfig.json", "r", encoding="utf-8") as f:
     config = json.load(f)
 
-SERVER_URL = (
-    f"http://{config['server_ip']}:"
-    f"{config['server_port']}"
-    f"{config['upload_path']}"
-)
-DEVICE_ID = config["device_id"]
+SERVER_URL = f"http://{config['server_ip']}:{config['server_port']}{config['upload_path']}"
+DEVICE_ID  = config["device_id"]
 logger.info("服务器地址: %s", SERVER_URL)
 
 # =========================================================
-# RK3588 项目目录
+# HTTP（带重试）
+# =========================================================
+session = requests.Session()
+retry = Retry(total=2, backoff_factor=0.5, status_forcelist=[500, 502, 503, 504])
+session.mount("http://", HTTPAdapter(max_retries=retry))
+
+# =========================================================
+# 模型路径
 # =========================================================
 ROOT_DIR       = "/home/elf/demo/make"
 MODEL_EXEC     = os.path.join(ROOT_DIR, "rknn_vision")
 DROWNING_MODEL = "/home/elf/demo/best_int8_fixed.rknn"
 PERSON_MODEL   = "/home/elf/demo/yolov8m_int8_fixed.rknn"
-logger.info("ROOT_DIR = %s", ROOT_DIR)
 
 # =========================================================
-# 上传队列
-# 核心优化：丢旧帧保新帧
-# 队列满时弹出最旧的帧，插入最新的帧
-# 保证服务器收到的永远是最新数据
+# 报警阈值
 # =========================================================
-QUEUE_SIZE   = 5  # 小队列 = 低延迟，多余的帧自动丢弃
-upload_queue = queue.Queue(maxsize=QUEUE_SIZE)
-_stop_event  = threading.Event()
+CONSECUTIVE_DROWNING = 3    # 连续 N 帧溺水 → 报警上传
+ALARM_COOLDOWN_SEC   = 5    # N 秒内不重复报警
 
 # =========================================================
 # 正则
@@ -73,7 +65,6 @@ RE_CALL           = re.compile(r"CallforHelp\s*=\s*(\d+)")
 RE_PRESSURE       = re.compile(r"Pressure\s*=\s*(\d+)")
 RE_TARGET         = re.compile(r"Drowning:\s*conf=([\d.]+)\s*center=\((\d+),(\d+)\)")
 
-
 # =========================================================
 # 综合报警
 # =========================================================
@@ -84,145 +75,107 @@ def compute_alarm(data):
         return 1
     return 0
 
-
 # =========================================================
-# 丢旧帧保新帧入队
+# 上传（同步，低频调用）
 # =========================================================
-def enqueue_drop_old(data):
-    while True:
-        try:
-            upload_queue.put_nowait(data)
-            return
-        except queue.Full:
-            # 队列满，弹出最旧的帧
-            try:
-                dropped = upload_queue.get_nowait()
-                upload_queue.task_done()
-                logger.warning(
-                    "队列满，丢弃旧帧 %s 保留新帧 %s",
-                    dropped["frameNo"],
-                    data["frameNo"]
-                )
-            except queue.Empty:
-                pass
-
-
-# =========================================================
-# 异步上传单帧
-# =========================================================
-async def upload_once(session, data):
-    form = aiohttp.FormData()
-    form.add_field("deviceId",      DEVICE_ID)
-    form.add_field("frameNo",       str(data["frameNo"]))
-    form.add_field("drowningCount", str(data["drowningCount"]))
-    form.add_field("personCount",   str(data["drowningCount"] + data["personOutOfWater"]))
-    form.add_field("callForHelp",   str(data["callForHelp"]))
-    form.add_field("pressure",      str(data["pressure"]))
-    form.add_field("alarm",         str(data["alarm"]))
-    form.add_field("targets",       json.dumps(data["targets"], ensure_ascii=False))
-
+def do_upload(data):
+    form = {
+        "deviceId":      DEVICE_ID,
+        "frameNo":       str(data["frameNo"]),
+        "drowningCount": str(data["drowningCount"]),
+        "personCount":   str(data["drowningCount"] + data["personOutOfWater"]),
+        "callForHelp":   str(data["callForHelp"]),
+        "pressure":      str(data["pressure"]),
+        "alarm":         str(data["alarm"]),
+        "targets":       json.dumps(data["targets"], ensure_ascii=False),
+    }
     try:
-        async with session.post(
-            SERVER_URL,
-            data=form,
-            timeout=aiohttp.ClientTimeout(total=5)
-        ) as resp:
-            resp.raise_for_status()
-            logger.info(
-                "上传成功 frame=%s drowning=%s call=%s alarm=%s",
-                data["frameNo"],
-                data["drowningCount"],
-                data["callForHelp"],
-                data["alarm"],
-            )
-    except asyncio.TimeoutError:
-        logger.error("上传超时 frame=%s", data["frameNo"])
+        r = session.post(SERVER_URL, data=form, timeout=10)
+        r.raise_for_status()
+        logger.info("上传成功 frame=%s drowning=%s call=%s pressure=%s alarm=%s",
+                     data["frameNo"], data["drowningCount"],
+                     data["callForHelp"], data["pressure"], data["alarm"])
     except Exception as e:
         logger.error("上传失败 frame=%s: %s", data["frameNo"], e)
 
+# =========================================================
+# 报警去重状态
+# =========================================================
+consecutive_drowning = 0     # 连续溺水帧计数
+alarm_sent           = False # 当前溺水事件是否已上传
+last_alarm_upload    = 0     # 上次报警上传时间戳
+last_call_for_help   = 0     # 上一帧呼救声
+last_pressure        = 0     # 上一帧压力
+
+def upload_decision(frame_data):
+    """每帧解析完成后调用，决定是否上传"""
+    global consecutive_drowning, alarm_sent, last_alarm_upload
+    global last_call_for_help, last_pressure
+
+    now = time.time()
+    uploaded = False
+
+    # ──── 1. 呼救声：状态变化即上传 ────
+    call = frame_data["callForHelp"]
+    if call != last_call_for_help:
+        frame_data["alarm"] = compute_alarm(frame_data)
+        logger.info("🔊 呼救声变化 %d→%d，立即上传", last_call_for_help, call)
+        do_upload(frame_data)
+        last_call_for_help = call
+        uploaded = True
+
+    # ──── 2. 压力传感器：状态变化即上传 ────
+    pres = frame_data["pressure"]
+    if pres != last_pressure:
+        frame_data["alarm"] = compute_alarm(frame_data)
+        logger.info("⚓ 压力传感器变化 %d→%d，立即上传", last_pressure, pres)
+        do_upload(frame_data)
+        last_pressure = pres
+        uploaded = True
+
+    # ──── 3. 溺水报警：连续 N 帧才上传 ────
+    drowning = frame_data["drowningCount"]
+
+    if drowning > 0:
+        consecutive_drowning += 1
+    else:
+        # 溺水中断 → 重置
+        if consecutive_drowning >= CONSECUTIVE_DROWNING and alarm_sent:
+            # 之前发过报警，现在溺水结束 → 发一帧 "解除" 通知
+            frame_data["alarm"] = 0
+            logger.info("✅ 溺水结束 frame=%s，上传解除", frame_data["frameNo"])
+            do_upload(frame_data)
+            uploaded = True
+        consecutive_drowning = 0
+        alarm_sent = False
+
+    # 达到阈值 + 未重复 + 冷却已过
+    if consecutive_drowning >= CONSECUTIVE_DROWNING and not alarm_sent:
+        if now - last_alarm_upload >= ALARM_COOLDOWN_SEC:
+            frame_data["alarm"] = 1
+            logger.warning("🛟 溺水报警! 连续%d帧, frame=%s",
+                           consecutive_drowning, frame_data["frameNo"])
+            do_upload(frame_data)
+            alarm_sent = True
+            last_alarm_upload = now
+            uploaded = True
+
+    return uploaded
 
 # =========================================================
-# 异步上传主循环
-# 顺序上传，一帧接一帧，避免并发导致的脉冲式延迟
-# 队列满时自动丢弃旧帧（enqueue_drop_old）
-# =========================================================
-async def upload_loop():
-    connector = aiohttp.TCPConnector(
-        limit=2,
-        keepalive_timeout=30,
-        enable_cleanup_closed=True,
-    )
-
-    async with aiohttp.ClientSession(connector=connector) as session:
-        loop = asyncio.get_running_loop()
-
-        while not _stop_event.is_set():
-            try:
-                data = await loop.run_in_executor(
-                    None,
-                    lambda: upload_queue.get(timeout=1)
-                )
-            except queue.Empty:
-                continue
-
-            if data is None:
-                upload_queue.task_done()
-                break
-
-            # 顺序上传，一帧一帧来，不做并发
-            await upload_once(session, data)
-            upload_queue.task_done()
-
-    logger.info("上传协程退出")
-
-
-# =========================================================
-# 异步上传线程入口
-# =========================================================
-def start_upload_loop():
-    asyncio.run(upload_loop())
-
-
-# =========================================================
-# stderr 读取线程
-# =========================================================
-def stderr_reader(proc):
-    for line in proc.stderr:
-        line = line.strip()
-        if line:
-            logger.error("[STDERR] %s", line)
-
-
-# =========================================================
-# 启动模型进程
+# 启动模型
 # =========================================================
 process = subprocess.Popen(
     [MODEL_EXEC, DROWNING_MODEL, PERSON_MODEL],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    text=True,
-    encoding="utf-8",
-    errors="ignore",
-    bufsize=1,
-    cwd=ROOT_DIR,
+    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    text=True, encoding="utf-8", errors="ignore",
+    bufsize=1, cwd=ROOT_DIR,
 )
 logger.info("模型进程启动 PID=%d", process.pid)
 
-# =========================================================
-# 启动线程
-# =========================================================
-stderr_thread = threading.Thread(
-    target=stderr_reader,
-    args=(process,),
-    daemon=True
-)
-stderr_thread.start()
-
-upload_thread = threading.Thread(
-    target=start_upload_loop,
-    daemon=True
-)
-upload_thread.start()
+threading.Thread(target=lambda: [logger.error("[STDERR] %s", l.strip())
+                                  for l in process.stderr if l.strip()],
+                 daemon=True).start()
 
 # =========================================================
 # 主循环
@@ -232,7 +185,6 @@ frame_data = None
 try:
     while True:
         line = process.stdout.readline()
-
         if not line:
             if process.poll() is not None:
                 logger.warning("模型退出 code=%s", process.returncode)
@@ -243,12 +195,11 @@ try:
         line = line.strip()
         print(line)
 
-        # ── 新帧 ──────────────────────────────────────────
+        # ── 新帧标记：上一帧解析完成，做上传决策 ──
         m = RE_FRAME.search(line)
         if m:
-            if frame_data:
-                frame_data["alarm"] = compute_alarm(frame_data)
-                enqueue_drop_old(frame_data.copy())
+            if frame_data is not None:
+                upload_decision(frame_data)
 
             frame_data = {
                 "frameNo":          int(m.group(1)),
@@ -263,11 +214,10 @@ try:
 
         if frame_data is None:
             continue
-
         if line.startswith("[FPS]"):
             continue
 
-        # ── 字段解析 ─────────────────────────────────────
+        # ── 逐字段解析 ──
         m = RE_DROWNING_COUNT.search(line)
         if m:
             frame_data["drowningCount"] = int(m.group(1))
@@ -294,37 +244,12 @@ try:
                 "centerY": int(m.group(3)),
             })
 
-# =========================================================
-# 退出
-# =========================================================
 finally:
     logger.info("程序退出中...")
-
-    if frame_data:
-        frame_data["alarm"] = compute_alarm(frame_data)
-        try:
-            enqueue_drop_old(frame_data.copy())
-        except Exception:
-            pass
-
-    # 通知上传协程退出
-    _stop_event.set()
-    upload_queue.put(None)
-
-    # 等待上传线程完成，最多10秒
-    upload_thread.join(timeout=10)
-    if upload_thread.is_alive():
-        logger.warning("上传线程未能在10秒内退出")
-
-    stderr_thread.join(timeout=3)
-
-    # 终止模型进程
     if process.poll() is None:
         process.terminate()
         try:
             process.wait(timeout=5)
         except subprocess.TimeoutExpired:
             process.kill()
-            logger.warning("模型进程强制终止")
-
-    logger.info("模型结束，退出码: %s", process.returncode)
+    logger.info("程序已退出")

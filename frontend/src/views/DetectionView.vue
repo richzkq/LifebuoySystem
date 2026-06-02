@@ -63,73 +63,14 @@
         <div class="stat-cards">
 
           <div class="card glass-item">
-            <div class="card__num">
-              {{ frame.personCount ?? 0 }}
+            <div class="card__num" :class="{ 'card__num--alarm': frame.drowningCount > 0 }">
+              {{ frame.drowningCount ?? 0 }}
             </div>
 
             <div class="card__label">
-              总人数
+              溺水人数
             </div>
           </div>
-
-        </div>
-
-        <div class="target-list-wrap">
-
-          <div class="section-title">
-            实时识别明细
-          </div>
-
-          <div class="drowning-summary">
-            <span>溺水人数:</span>
-            <span
-              :class="{'alarm-active': frame.drowningCount > 0}"
-            >
-              {{ frame.drowningCount ?? 0 }}
-            </span>
-          </div>
-
-          <div
-            v-if="!frame.targets?.length"
-            class="empty"
-          >
-
-          </div>
-
-          <table
-            v-else
-            class="target-table"
-          >
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>状态</th>
-                <th>位置</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr
-                v-for="t in frame.targets"
-                :key="t.index"
-              >
-                <td>#{{ t.index }}</td>
-
-                <td>
-                  <span
-                    class="badge"
-                    :style="{ background: scoreColor(t.score) }"
-                  >
-                    {{ t.label }}
-                  </span>
-                </td>
-
-                <td>
-                  ({{ t.centerX }}, {{ t.centerY }})
-                </td>
-              </tr>
-            </tbody>
-          </table>
 
         </div>
 
@@ -183,40 +124,6 @@
 
         </div>
 
-        <div class="history-wrap">
-
-          <div class="section-title">
-            检测频率监控
-          </div>
-
-          <div class="sparkline-wrap glass-item">
-
-            <svg
-              width="100%"
-              height="60"
-              class="sparkline"
-            >
-              <polyline
-                :points="sparkPoints"
-                fill="none"
-                stroke="#FF5E00"
-                stroke-width="2"
-              />
-
-              <circle
-                v-for="(p, i) in sparkRaw"
-                :key="i"
-                :cx="p.x"
-                :cy="p.y"
-                r="2"
-                fill="#fff"
-              />
-            </svg>
-
-          </div>
-
-        </div>
-
         <div class="device-list-wrap">
           <div class="device-list-header">
             <div class="section-title no-margin">
@@ -242,7 +149,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -250,7 +157,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { getAlarmList } from '@/api/alarm'
 import { useFrameStream } from '@/composables/useFrameStream'
-import { DEFAULT_DEVICE_ID, UI } from '@/config'
+import { DEFAULT_DEVICE_ID } from '@/config'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -285,56 +192,6 @@ async function fetchAlarmList() {
 function handleLogout() {
   authStore.logout()
   router.replace('/login')
-}
-
-// ============ 折线图数据 ============
-const history = ref([])
-
-// 每次收到新帧后更新历史
-import { watch } from 'vue'
-watch(
-  () => frame.value.frameNo,
-  (newFrameNo) => {
-    if (newFrameNo != null) {
-      history.value.push({
-        frameNo: newFrameNo,
-        count: frame.value.personCount ?? 0,
-      })
-      if (history.value.length > UI.HISTORY_MAX) {
-        history.value.shift()
-      }
-    }
-  }
-)
-
-const sparkRaw = computed(() => {
-  const list = history.value.slice(-UI.HISTORY_MAX)
-  if (!list.length) {
-    return []
-  }
-
-  const max = Math.max(...list.map(h => h.count), 1)
-  const W = 260
-  const H = 55
-  const PAD = 5
-
-  return list.map((h, i) => ({
-    x: PAD + (i / Math.max(list.length - 1, 1)) * (W - PAD * 2),
-    y: H - PAD - (h.count / max) * (H - PAD * 2),
-  }))
-})
-
-const sparkPoints = computed(() =>
-  sparkRaw.value
-    .map(p => `${p.x},${p.y}`)
-    .join(' ')
-)
-
-// ============ 辅助方法 ============
-function scoreColor(score) {
-  if (score >= 0.8) return '#EF4444'
-  if (score >= 0.5) return '#F59E0B'
-  return '#10B981'
 }
 
 // ============ 生命周期 ============
@@ -497,7 +354,12 @@ onMounted(() => {
 .card__num {
   font-size: 32px;
   font-weight: 800;
-  color: #FF5E00;
+  color: #10B981;
+  transition: color 0.3s;
+}
+.card__num--alarm {
+  color: #EF4444;
+  animation: pulse-red 1.5s infinite;
 }
 
 .card__label {
