@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 帧缓存服务 — 带 wait/notify 机制
  * <p>
- * 每帧存储后 notify 唤醒 MJPEG 流，消除轮询延迟
+ * storeFrame 和 waitForNewFrame 在同一个锁上同步，消除竞态条件
  *
  * @author ZKQ
  */
@@ -17,18 +17,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public class FrameServiceImpl implements FrameService {
 
     private final Map<String, byte[]> latestFrames = new ConcurrentHashMap<>();
+    /** 帧序号，每存一帧递增，用于 waitForNewFrame 去重 */
+    private final Map<String, Long> frameCounters = new ConcurrentHashMap<>();
     /** 每个设备的帧通知锁 */
     private final Map<String, Object> frameLocks = new ConcurrentHashMap<>();
 
     @Override
     public void storeFrame(String deviceId, byte[] data) {
-        latestFrames.put(deviceId, data);
-        // 唤醒等待该设备帧的 MJPEG 流
-        Object lock = frameLocks.get(deviceId);
-        if (lock != null) {
-            synchronized (lock) {
-                lock.notifyAll();
-            }
+        // 在锁内更新帧数据和计数器，然后通知
+        Object lock = frameLocks.computeIfAbsent(deviceId, k -> new Object());
+        synchronized (lock) {
+            latestFrames.put(deviceId, data);
+            frameCounters.merge(deviceId, 1L, Long::sum);
+            lock.notifyAll();
         }
     }
 
@@ -40,24 +41,37 @@ public class FrameServiceImpl implements FrameService {
     @Override
     public byte[] waitForNewFrame(String deviceId, byte[] lastFrame, long timeoutMs) {
         Object lock = frameLocks.computeIfAbsent(deviceId, k -> new Object());
+        long deadline = System.currentTimeMillis() + timeoutMs;
+
         synchronized (lock) {
-            long deadline = System.currentTimeMillis() + timeoutMs;
+            // 先检查是否已经有比 lastFrame 更新的帧
+            Long currentCounter = frameCounters.get(deviceId);
+            long lastCounter = frameCounters.getOrDefault(deviceId + ".sent", 0L);
+
             while (true) {
                 byte[] current = latestFrames.get(deviceId);
-                // 有新帧且不是同一帧
-                if (current != null && current != lastFrame) {
+
+                // 有帧，且计数器变化 → 是新帧
+                if (current != null && currentCounter != null
+                        && !currentCounter.equals(lastCounter)) {
+                    frameCounters.put(deviceId + ".sent", currentCounter);
                     return current;
                 }
+
                 long remaining = deadline - System.currentTimeMillis();
                 if (remaining <= 0) {
-                    return null; // 超时
+                    return null; // 超时，发 keepalive
                 }
+
                 try {
                     lock.wait(Math.min(remaining, 500));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return null;
                 }
+
+                // 醒来后重新读取计数器
+                currentCounter = frameCounters.get(deviceId);
             }
         }
     }

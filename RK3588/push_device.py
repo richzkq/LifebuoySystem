@@ -59,7 +59,7 @@ logger.info("ROOT_DIR = %s", ROOT_DIR)
 # 队列满时弹出最旧的帧，插入最新的帧
 # 保证服务器收到的永远是最新数据
 # =========================================================
-QUEUE_SIZE   = 30
+QUEUE_SIZE   = 5  # 小队列 = 低延迟，多余的帧自动丢弃
 upload_queue = queue.Queue(maxsize=QUEUE_SIZE)
 _stop_event  = threading.Event()
 
@@ -143,31 +143,20 @@ async def upload_once(session, data):
 
 # =========================================================
 # 异步上传主循环
-# 核心优化：
-# 1. aiohttp 异步 HTTP，不阻塞
-# 2. 并发上传，最多同时 3 个请求
-# 3. 用信号量控制并发数，防止服务器过载
+# 顺序上传，一帧接一帧，避免并发导致的脉冲式延迟
+# 队列满时自动丢弃旧帧（enqueue_drop_old）
 # =========================================================
 async def upload_loop():
-    # 连接池复用，减少 TCP 握手开销
     connector = aiohttp.TCPConnector(
-        limit=10,           # 最大连接数
+        limit=2,
         keepalive_timeout=30,
         enable_cleanup_closed=True,
     )
 
-    # 并发信号量：最多同时 3 个上传请求
-    semaphore = asyncio.Semaphore(3)
-
     async with aiohttp.ClientSession(connector=connector) as session:
-        loop = asyncio.get_event_loop()
-
-        async def upload_with_sem(data):
-            async with semaphore:
-                await upload_once(session, data)
+        loop = asyncio.get_running_loop()
 
         while not _stop_event.is_set():
-            # 从队列取数据（放线程池避免阻塞事件循环）
             try:
                 data = await loop.run_in_executor(
                     None,
@@ -180,16 +169,9 @@ async def upload_loop():
                 upload_queue.task_done()
                 break
 
-            # 异步并发上传，不等待结果直接取下一帧
-            asyncio.create_task(upload_with_sem(data))
+            # 顺序上传，一帧一帧来，不做并发
+            await upload_once(session, data)
             upload_queue.task_done()
-
-        # 等待所有未完成的上传任务
-        pending = [t for t in asyncio.all_tasks()
-                   if t is not asyncio.current_task()]
-        if pending:
-            logger.info("等待 %d 个上传任务完成...", len(pending))
-            await asyncio.gather(*pending, return_exceptions=True)
 
     logger.info("上传协程退出")
 
