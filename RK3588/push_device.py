@@ -46,8 +46,8 @@ session.mount("http://", HTTPAdapter(max_retries=retry))
 # =========================================================
 ROOT_DIR       = "/home/elf/demo/make"
 MODEL_EXEC     = os.path.join(ROOT_DIR, "rknn_vision")
-DROWNING_MODEL = "/home/elf/demo/best_int8_fixed.rknn"
-PERSON_MODEL   = "/home/elf/demo/yolov8m_int8_fixed.rknn"
+DROWNING_MODEL = "/home/elf/demo/yolov8n_int8.rknn"
+PERSON_MODEL   = "/home/elf/demo/dummy_best_int8.rknn"
 
 # =========================================================
 # 报警阈值
@@ -63,6 +63,7 @@ RE_DROWNING_COUNT = re.compile(r"Drowning=(\d+)")
 RE_PERSON_COUNT   = re.compile(r"Person out of water=(\d+)")
 RE_CALL           = re.compile(r"CallforHelp\s*=\s*(\d+)")
 RE_PRESSURE       = re.compile(r"Pressure\s*=\s*(\d+)")
+RE_TEMP           = re.compile(r"温度:\s*([\d.]+)")
 RE_TARGET         = re.compile(r"Drowning:\s*conf=([\d.]+)\s*center=\((\d+),(\d+)\)")
 
 # =========================================================
@@ -87,6 +88,7 @@ def do_upload(data):
         "callForHelp":   str(data["callForHelp"]),
         "pressure":      str(data["pressure"]),
         "alarm":         str(data["alarm"]),
+        "temperature":   str(data.get("temperature", 0.0)),
         "targets":       json.dumps(data["targets"], ensure_ascii=False),
     }
     try:
@@ -99,68 +101,75 @@ def do_upload(data):
         logger.error("上传失败 frame=%s: %s", data["frameNo"], e)
 
 # =========================================================
-# 报警去重状态
+# 上传状态机
 # =========================================================
 consecutive_drowning = 0     # 连续溺水帧计数
-alarm_sent           = False # 当前溺水事件是否已上传
+alarm_active         = False # 当前是否处于报警状态
 last_alarm_upload    = 0     # 上次报警上传时间戳
+last_heartbeat       = 0     # 上次心跳上传时间戳
 last_call_for_help   = 0     # 上一帧呼救声
 last_pressure        = 0     # 上一帧压力
 
+HEARTBEAT_INTERVAL = 1.0      # 心跳间隔：每秒上传 1 次（保持 uni-app 数据新鲜）
+
 def upload_decision(frame_data):
     """每帧解析完成后调用，决定是否上传"""
-    global consecutive_drowning, alarm_sent, last_alarm_upload
-    global last_call_for_help, last_pressure
+    global consecutive_drowning, alarm_active, last_alarm_upload
+    global last_call_for_help, last_pressure, last_heartbeat
 
     now = time.time()
-    uploaded = False
+    drowning = frame_data["drowningCount"]
 
-    # ──── 1. 呼救声：状态变化即上传 ────
+    # ──── 1. 溺水计数更新 ────
+    if drowning > 0:
+        consecutive_drowning += 1
+    else:
+        consecutive_drowning = 0
+
+    # ──── 2. 溺水报警触发（连续 3 帧 → 立即上传） ────
+    if consecutive_drowning >= CONSECUTIVE_DROWNING and not alarm_active:
+        if now - last_alarm_upload >= ALARM_COOLDOWN_SEC:
+            frame_data["alarm"] = 1
+            logger.warning("🛟 溺水报警! 连续%d帧, frame=%s",
+                           consecutive_drowning, frame_data["frameNo"])
+            do_upload(frame_data)
+            alarm_active = True
+            last_alarm_upload = now
+            last_heartbeat = now
+
+    # ──── 3. 溺水解除 ────
+    if consecutive_drowning == 0 and alarm_active:
+        frame_data["alarm"] = 0
+        logger.info("✅ 溺水结束 frame=%s，上传解除", frame_data["frameNo"])
+        do_upload(frame_data)
+        alarm_active = False
+
+    # ──── 4. 呼救声：状态变化即上传 ────
     call = frame_data["callForHelp"]
     if call != last_call_for_help:
         frame_data["alarm"] = compute_alarm(frame_data)
         logger.info("🔊 呼救声变化 %d→%d，立即上传", last_call_for_help, call)
         do_upload(frame_data)
         last_call_for_help = call
-        uploaded = True
 
-    # ──── 2. 压力传感器：状态变化即上传 ────
+    # ──── 5. 压力传感器：状态变化即上传 ────
     pres = frame_data["pressure"]
     if pres != last_pressure:
         frame_data["alarm"] = compute_alarm(frame_data)
         logger.info("⚓ 压力传感器变化 %d→%d，立即上传", last_pressure, pres)
         do_upload(frame_data)
         last_pressure = pres
-        uploaded = True
+        if pres == 1:
+            # 压力触发 = 人已救起 → 强制终止所有报警
+            alarm_active = False
+            consecutive_drowning = 0
+            logger.info("⛔ 压力传感器触发，强制终止所有报警")
 
-    # ──── 3. 溺水报警：连续 N 帧才上传 ────
-    drowning = frame_data["drowningCount"]
-
-    if drowning > 0:
-        consecutive_drowning += 1
-    else:
-        # 溺水中断 → 重置
-        if consecutive_drowning >= CONSECUTIVE_DROWNING and alarm_sent:
-            # 之前发过报警，现在溺水结束 → 发一帧 "解除" 通知
-            frame_data["alarm"] = 0
-            logger.info("✅ 溺水结束 frame=%s，上传解除", frame_data["frameNo"])
-            do_upload(frame_data)
-            uploaded = True
-        consecutive_drowning = 0
-        alarm_sent = False
-
-    # 达到阈值 + 未重复 + 冷却已过
-    if consecutive_drowning >= CONSECUTIVE_DROWNING and not alarm_sent:
-        if now - last_alarm_upload >= ALARM_COOLDOWN_SEC:
-            frame_data["alarm"] = 1
-            logger.warning("🛟 溺水报警! 连续%d帧, frame=%s",
-                           consecutive_drowning, frame_data["frameNo"])
-            do_upload(frame_data)
-            alarm_sent = True
-            last_alarm_upload = now
-            uploaded = True
-
-    return uploaded
+    # ──── 6. 心跳：每秒上传当前帧数据（uni-app 轮询 + 舵机计数） ────
+    if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+        frame_data["alarm"] = compute_alarm(frame_data)  # 用 compute_alarm：压力=1 时强制返回 0
+        do_upload(frame_data)
+        last_heartbeat = now
 
 # =========================================================
 # 启动模型
@@ -208,6 +217,7 @@ try:
                 "callForHelp":      0,
                 "pressure":         0,
                 "alarm":            0,
+                "temperature":      0.0,
                 "targets":          [],
             }
             continue
@@ -233,6 +243,10 @@ try:
         m = RE_PRESSURE.search(line)
         if m:
             frame_data["pressure"] = int(m.group(1))
+
+        m = RE_TEMP.search(line)
+        if m:
+            frame_data["temperature"] = float(m.group(1))
 
         m = RE_TARGET.search(line)
         if m:

@@ -25,12 +25,13 @@ public class DeviceController {
             @RequestParam("callForHelp") Integer callForHelp,
             @RequestParam("pressure") Integer pressure,
             @RequestParam("alarm") Integer alarm,
+            @RequestParam(value = "temperature", defaultValue = "0.0") Double temperature,
             @RequestParam("targets") String targetsJson,
             @RequestParam(value = "file", required = false) MultipartFile file
     ) {
         return deviceService.processUpload(
                 deviceId, frameNo, drowningCount, personCount,
-                callForHelp, pressure, alarm, targetsJson, file
+                callForHelp, pressure, alarm, temperature, targetsJson, file
         );
     }
 

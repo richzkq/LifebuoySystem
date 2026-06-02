@@ -32,6 +32,12 @@
 
           <span class="divider">|</span>
 
+          <span>
+            温度: <span :style="{ color: frame.temperature > 60 ? '#EF4444' : frame.temperature > 45 ? '#F59E0B' : '#10B981' }">{{ frame.temperature ?? '—' }}°C</span>
+          </span>
+
+          <span class="divider">|</span>
+
           <button class="logout-btn" @click="handleLogout">退出</button>
         </div>
       </div>

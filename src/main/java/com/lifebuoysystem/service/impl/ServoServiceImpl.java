@@ -45,8 +45,17 @@ public class ServoServiceImpl implements ServoService {
     // ==================== 核心算法 ====================
 
     @Override
-    public void onFrameProcessed(String deviceId, Integer drowningCount) {
+    public void onFrameProcessed(String deviceId, Integer drowningCount, Integer alarm) {
         if (deviceId == null || drowningCount == null) return;
+
+        // 综合报警为 0（pressure=1 或显式解除）→ 强制复位
+        if (alarm != null && alarm == 0) {
+            Integer prev = consecutiveCounts.put(deviceId, 0);
+            if (prev != null && prev > 0) {
+                log.info("设备 {} 报警解除 (alarm=0)，舵机计数复位 (之前连续 {} 帧)", deviceId, prev);
+            }
+            return;
+        }
 
         if (drowningCount > 0) {
             // 原子递增连续计数
