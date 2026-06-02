@@ -53,24 +53,38 @@ public class FrameController {
         String boundary = "frame";
         response.setContentType(
                 "multipart/x-mixed-replace; boundary=" + boundary);
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("X-Accel-Buffering", "no");  // 禁用 Nginx 缓冲
         OutputStream out = response.getOutputStream();
 
+        byte[] lastData = null;
         try {
             while (true) {
-                byte[] data = frameService.getSnapshot(deviceId);
-                if (data != null) {
+                // 阻塞等待新帧（有 notify 唤醒，零轮询延迟）
+                // 2 秒超时发 keepalive 防止 Nginx 代理断开
+                byte[] data = frameService.waitForNewFrame(deviceId, lastData, 2000);
+
+                if (data == null) {
+                    // 超时无新帧，发 keepalive
                     out.write(("--" + boundary + "\r\n").getBytes());
-                    out.write("Content-Type: image/jpeg\r\n".getBytes());
-                    out.write(("Content-Length: " + data.length + "\r\n\r\n")
-                            .getBytes());
-                    out.write(data);
-                    out.write("\r\n".getBytes());
+                    out.write("Content-Type: text/plain\r\n\r\n".getBytes());
+                    out.write("ping\r\n".getBytes());
                     out.flush();
+                    continue;
                 }
-                Thread.sleep(100); // 约 10fps
+
+                // 新帧到达，立即推送
+                out.write(("--" + boundary + "\r\n").getBytes());
+                out.write("Content-Type: image/jpeg\r\n".getBytes());
+                out.write(("Content-Length: " + data.length + "\r\n\r\n")
+                        .getBytes());
+                out.write(data);
+                out.write("\r\n".getBytes());
+                out.flush();
+                lastData = data;
             }
         } catch (Exception e) {
-            // 前端关闭连接会抛异常，正常结束即可
+            // 前端关闭连接会抛异常，正常结束
         }
     }
 }

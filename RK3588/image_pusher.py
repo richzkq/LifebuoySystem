@@ -1,8 +1,8 @@
 import os
 import json
+import struct
 import logging
 import asyncio
-import base64
 import websockets
 import queue
 
@@ -105,14 +105,20 @@ async def wait_file_complete(path, max_wait_ms=200):
 
 
 # =========================================================
-# Base64 编码放线程池，不阻塞事件循环
+# 读取原始 JPEG 字节 (不放线程池，拼接时直接用)
 # =========================================================
-def read_and_encode(path):
+def read_raw(path):
     with open(path, "rb") as f:
-        img_bytes = f.read()
-    if len(img_bytes) == 0:
-        return None
-    return "data:image/jpeg;base64," + base64.b64encode(img_bytes).decode("utf-8")
+        data = f.read()
+    return data if len(data) > 0 else None
+
+# =========================================================
+# 构建二进制帧: 4字节deviceId长度 + deviceId + JPEG
+# =========================================================
+def build_binary_frame(device_id, jpg_bytes):
+    dev_bytes = device_id.encode("utf-8")
+    header = struct.pack(">I", len(dev_bytes))   # 大端 uint32
+    return header + dev_bytes + jpg_bytes
 
 
 # =========================================================
@@ -191,26 +197,23 @@ async def push_loop():
                         continue
 
                     try:
-                        # 文件读取 + Base64 编码放线程池
+                        # 读取原始 JPEG → 构建二进制帧
                         loop = asyncio.get_running_loop()
-                        image_data = await loop.run_in_executor(
+                        jpg_bytes = await loop.run_in_executor(
                             None,
-                            read_and_encode,
+                            read_raw,
                             path
                         )
 
-                        if image_data is None:
+                        if jpg_bytes is None or len(jpg_bytes) == 0:
                             logger.warning(
                                 "空文件跳过: %s",
                                 os.path.basename(path)
                             )
                             continue
 
-                        payload = json.dumps({
-                            "deviceId":    DEVICE_ID,
-                            "imageBase64": image_data,
-                        })
-
+                        # 二进制帧: header + deviceId + raw JPEG
+                        payload = build_binary_frame(DEVICE_ID, jpg_bytes)
                         await ws.send(payload)
 
                         logger.info(
