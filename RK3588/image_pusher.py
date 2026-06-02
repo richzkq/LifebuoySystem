@@ -1,6 +1,7 @@
 import os
 import json
 import struct
+import shutil
 import logging
 import asyncio
 import websockets
@@ -24,19 +25,39 @@ WS_PUSH_URL = (
 )
 DEVICE_ID   = config["device_id"]
 
-# 核心优化：帧目录放内存盘 /dev/shm，消除磁盘 IO 延迟
-# 旧路径：/home/elf/demo/make/frames_int8_pixel_box
-# 如果 AI 模型还是写旧路径，用这行软链接：
-#   ln -s /dev/shm/frames_int8_pixel_box /home/elf/demo/make/frames_int8_pixel_box
-FRAME_DIR   = "/dev/shm/frames_int8_pixel_box"
+# =========================================================
+# 帧目录初始化（自动配置内存盘，零磁盘 IO）
+# AI 模型写这里 → 软链接指向内存盘 → 读写都是 RAM，延迟 <1ms
+# =========================================================
+AI_MODEL_OUTPUT = "/home/elf/demo/make/frames_int8_pixel_box"
+RAMDISK_DIR     = "/dev/shm/frames_int8_pixel_box"
 
+os.makedirs(RAMDISK_DIR, exist_ok=True)
+
+# 自动建立软链接：AI 模型路径 → 内存盘
+if os.path.islink(AI_MODEL_OUTPUT):
+    # 已经是软链接，检查是否指向正确位置
+    target = os.readlink(AI_MODEL_OUTPUT)
+    if target != RAMDISK_DIR:
+        logger.warning("软链接目标不匹配: %s → %s (期望 → %s)", AI_MODEL_OUTPUT, target, RAMDISK_DIR)
+elif os.path.isdir(AI_MODEL_OUTPUT):
+    # 是真实目录 → 移动内容到内存盘，替换为软链接
+    logger.info("移动现有帧到内存盘...")
+    for f in os.listdir(AI_MODEL_OUTPUT):
+        shutil.move(os.path.join(AI_MODEL_OUTPUT, f), RAMDISK_DIR)
+    os.rmdir(AI_MODEL_OUTPUT)
+    os.symlink(RAMDISK_DIR, AI_MODEL_OUTPUT)
+    logger.info("已建立软链接: %s → %s", AI_MODEL_OUTPUT, RAMDISK_DIR)
+elif not os.path.exists(AI_MODEL_OUTPUT):
+    # 不存在 → 直接建软链接
+    os.symlink(RAMDISK_DIR, AI_MODEL_OUTPUT)
+    logger.info("已建立软链接: %s → %s", AI_MODEL_OUTPUT, RAMDISK_DIR)
+
+FRAME_DIR   = RAMDISK_DIR
 KEEP_RECENT = 10
-QUEUE_SIZE  = 3  # 小队列 = 低延迟
+QUEUE_SIZE  = 3
 
 new_frame_queue = queue.Queue(maxsize=QUEUE_SIZE)
-
-# 确保目录存在
-os.makedirs(FRAME_DIR, exist_ok=True)
 
 
 # =========================================================
