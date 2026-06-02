@@ -2,9 +2,11 @@ package com.lifebuoysystem.config;
 
 import com.lifebuoysystem.handler.FrameWebSocketHandler;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.*;
+import org.springframework.web.socket.server.standard.ServletServerContainerFactoryBean;
 
 /**
  * WebSocket 配置
@@ -44,5 +46,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer, WebSoc
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(frameWebSocketHandler, "/ws-frame")
                 .setAllowedOriginPatterns("*");
+    }
+
+    // ==================== WebSocket 容器配置 ====================
+
+    /**
+     * 增大 WebSocket 消息缓冲区 — Base64 图片约 50KB，默认 8KB 不够
+     */
+    @Bean
+    public ServletServerContainerFactoryBean servletServerContainerFactoryBean() {
+        ServletServerContainerFactoryBean bean = new ServletServerContainerFactoryBean();
+        bean.setMaxTextMessageBufferSize(256 * 1024);  // 256KB
+        bean.setMaxBinaryMessageBufferSize(256 * 1024);
+        return bean;
     }
 }

@@ -174,11 +174,11 @@ async def push_loop():
 
                     # 阻塞等待新帧，无新帧完全休眠不占 CPU
                     try:
-                        path = await asyncio.get_event_loop()\
-                            .run_in_executor(
-                                None,
-                                lambda: new_frame_queue.get(timeout=2)
-                            )
+                        loop = asyncio.get_running_loop()
+                        path = await loop.run_in_executor(
+                            None,
+                            lambda: new_frame_queue.get(timeout=2)
+                        )
                     except Exception:
                         # 2秒无新帧，发心跳保活
                         try:
@@ -192,12 +192,12 @@ async def push_loop():
 
                     try:
                         # 文件读取 + Base64 编码放线程池
-                        image_data = await asyncio.get_event_loop()\
-                            .run_in_executor(
-                                None,
-                                read_and_encode,
-                                path
-                            )
+                        loop = asyncio.get_running_loop()
+                        image_data = await loop.run_in_executor(
+                            None,
+                            read_and_encode,
+                            path
+                        )
 
                         if image_data is None:
                             logger.warning(
@@ -221,11 +221,11 @@ async def push_loop():
 
                         clean_counter += 1
                         if clean_counter >= 20:
-                            await asyncio.get_event_loop()\
-                                .run_in_executor(
-                                    None,
-                                    clean_old_frames
-                                )
+                            loop = asyncio.get_running_loop()
+                            await loop.run_in_executor(
+                                None,
+                                clean_old_frames
+                            )
                             clean_counter = 0
 
                     except websockets.ConnectionClosed:

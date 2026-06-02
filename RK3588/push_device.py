@@ -3,6 +3,7 @@ import re
 import os
 import json
 import logging
+from logging.handlers import RotatingFileHandler
 import time
 import threading
 import queue
@@ -19,7 +20,12 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("push_device.log", encoding="utf-8")
+        RotatingFileHandler(
+            "push_device.log",
+            maxBytes=10 * 1024 * 1024,   # 10MB 一个文件
+            backupCount=3,                # 保留最近 3 个
+            encoding="utf-8"
+        )
     ]
 )
 logger = logging.getLogger(__name__)
