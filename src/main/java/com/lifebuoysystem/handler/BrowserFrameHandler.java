@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 浏览器帧推送 — 服务器收到 RK3588 的帧后，直接通过 WebSocket 推送给浏览器
@@ -25,15 +27,18 @@ public class BrowserFrameHandler extends AbstractWebSocketHandler {
 
     /** deviceId → 浏览器连接列表 */
     private final Map<String, List<WebSocketSession>> sessions = new ConcurrentHashMap<>();
+    /** 发送线程池：最多 4 个并行发送（通常只有 1-2 个浏览器连接） */
+    private final ExecutorService sendPool = Executors.newFixedThreadPool(4);
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
+        session.setTextMessageSizeLimit(128 * 1024);
+        session.setBinaryMessageSizeLimit(256 * 1024);
         log.info("浏览器帧连接 — session={}", session.getId());
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
-        // 首条消息是 deviceId
         String deviceId = message.getPayload().trim();
         sessions.computeIfAbsent(deviceId, k -> new CopyOnWriteArrayList<>()).add(session);
         log.info("浏览器订阅帧 deviceId={} session={}", deviceId, session.getId());
@@ -56,20 +61,24 @@ public class BrowserFrameHandler extends AbstractWebSocketHandler {
         log.error("浏览器帧连接异常 — session={}: {}", session.getId(), exception.getMessage());
     }
 
-    /** 向所有订阅该设备的浏览器广播原始 JPEG 帧 */
+    /** 向所有订阅该设备的浏览器广播原始 JPEG 帧（异步并行，互不阻塞） */
     public void broadcast(String deviceId, byte[] jpgBytes) {
         List<WebSocketSession> list = sessions.get(deviceId);
         if (list == null || list.isEmpty()) return;
 
-        BinaryMessage msg = new BinaryMessage(jpgBytes);
         for (WebSocketSession s : list) {
-            try {
-                if (s.isOpen()) {
-                    s.sendMessage(msg);
-                }
-            } catch (IOException e) {
+            if (!s.isOpen()) {
                 removeSession(s);
+                continue;
             }
+            // 每个客户端独立异步发送，慢客户端不阻塞其他人
+            sendPool.submit(() -> {
+                try {
+                    s.sendMessage(new BinaryMessage(jpgBytes));
+                } catch (Exception e) {
+                    removeSession(s);
+                }
+            });
         }
     }
 

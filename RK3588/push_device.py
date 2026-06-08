@@ -46,8 +46,8 @@ session.mount("http://", HTTPAdapter(max_retries=retry))
 # =========================================================
 ROOT_DIR       = "/home/elf/demo/make"
 MODEL_EXEC     = os.path.join(ROOT_DIR, "rknn_vision")
-DROWNING_MODEL = "/home/elf/demo/yolov8n_int8.rknn"
-PERSON_MODEL   = "/home/elf/demo/dummy_best_int8.rknn"
+DROWNING_MODEL = "/home/elf/demo/dummy_best_int8.rknn"
+PERSON_MODEL   = "/home/elf/demo/yolov8n_int8.rknn"
 
 # =========================================================
 # 报警阈值
