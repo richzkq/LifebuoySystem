@@ -1,23 +1,24 @@
 package com.lifebuoysystem.handler;
 
+import com.lifebuoysystem.entity.DeviceStatus;
 import com.lifebuoysystem.service.FrameService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.BinaryWebSocketHandler;
 
 import java.nio.ByteBuffer;
+import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 接收 RK3588 image_pusher.py 推送的二进制图片帧
  * <p>
- * 协议（精简高效，无 Base64 开销）：
- * <pre>
- * [4 字节 大端 uint32: deviceId 长度]
- * [N 字节: deviceId UTF-8]
- * [剩余: 原始 JPEG 字节]
- * </pre>
+ * 做三件事：存帧(FrameService) + 推视频(BrowserFrameHandler) + 推元数据(STOMP)
  *
  * @author ZKQ
  */
@@ -28,6 +29,10 @@ public class FrameWebSocketHandler extends BinaryWebSocketHandler {
 
     private final FrameService frameService;
     private final BrowserFrameHandler browserFrameHandler;
+    private final SimpMessagingTemplate messagingTemplate;
+
+    /** 每设备帧计数器，代替 model 输出的 frameNo */
+    private final Map<String, AtomicInteger> frameCounters = new ConcurrentHashMap<>();
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -39,15 +44,11 @@ public class FrameWebSocketHandler extends BinaryWebSocketHandler {
         try {
             ByteBuffer buf = message.getPayload();
 
-            // 读取 deviceId 长度（前4字节，大端 uint32）
             int devIdLen = buf.getInt();
-
-            // 读取 deviceId
             byte[] devBytes = new byte[devIdLen];
             buf.get(devBytes);
             String deviceId = new String(devBytes, java.nio.charset.StandardCharsets.UTF_8);
 
-            // 剩余全部是 JPEG 数据
             byte[] jpgBytes = new byte[buf.remaining()];
             buf.get(jpgBytes);
 
@@ -56,12 +57,24 @@ public class FrameWebSocketHandler extends BinaryWebSocketHandler {
                 return;
             }
 
+            // 1. 存帧（给快照/MJPEG 用）
             frameService.storeFrame(deviceId, jpgBytes);
 
-            // 同时直接推送给浏览器（零延迟，跳过 MJPEG/Nginx/HTTP multipart）
+            // 2. 推视频给浏览器
             browserFrameHandler.broadcast(deviceId, jpgBytes);
 
-            log.debug("帧已接收 deviceId={} size={}KB", deviceId, jpgBytes.length / 1024);
+            // 3. 推元数据到 STOMP（设备名 + 帧号）
+            int frameNo = frameCounters.computeIfAbsent(deviceId, k -> new AtomicInteger()).incrementAndGet();
+
+            DeviceStatus status = new DeviceStatus();
+            status.setDeviceId(deviceId);
+            status.setFrameNo(frameNo);
+            status.setUploadTime(LocalDateTime.now());
+
+            messagingTemplate.convertAndSend("/topic/frames/" + deviceId, status);
+
+            log.debug("帧已接收 deviceId={} frameNo={} size={}KB",
+                    deviceId, frameNo, jpgBytes.length / 1024);
         } catch (Exception e) {
             log.error("二进制帧解析失败: {}", e.getMessage());
         }
