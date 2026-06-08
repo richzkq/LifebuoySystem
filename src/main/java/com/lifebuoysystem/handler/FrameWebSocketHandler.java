@@ -4,6 +4,7 @@ import com.lifebuoysystem.entity.DeviceStatus;
 import com.lifebuoysystem.service.FrameService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
@@ -29,7 +30,10 @@ public class FrameWebSocketHandler extends BinaryWebSocketHandler {
 
     private final FrameService frameService;
     private final BrowserFrameHandler browserFrameHandler;
-    private final SimpMessagingTemplate messagingTemplate;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    @Lazy
+    private SimpMessagingTemplate messagingTemplate;
 
     /** 每设备帧计数器，代替 model 输出的 frameNo */
     private final Map<String, AtomicInteger> frameCounters = new ConcurrentHashMap<>();
