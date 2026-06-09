@@ -55,7 +55,8 @@ elif not os.path.exists(AI_MODEL_OUTPUT):
 
 FRAME_DIR   = RAMDISK_DIR
 KEEP_RECENT = 10
-QUEUE_SIZE  = 3
+# awatch 批量通知会一次传 5-10 个文件，队列太小导致大量丢帧
+QUEUE_SIZE  = 30
 
 new_frame_queue = queue.Queue(maxsize=QUEUE_SIZE)
 

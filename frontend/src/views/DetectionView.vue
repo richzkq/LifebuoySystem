@@ -49,8 +49,7 @@
 
         <div class="canvas-wrap">
 
-          <img id="monitorImage" :src="frameUrl"
-               alt="监控画面" style="width:100%;" />
+          <div id="frameContainer" style="width:100%;height:100%;"></div>
 
           <div v-if="!connected" class="overlay-status">
             <el-icon class="is-loading">
