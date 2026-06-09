@@ -30,30 +30,20 @@ export function useFrameStream(deviceId) {
     ws.onclose = () => { stop(); setTimeout(connect, 500) }
   }
 
-  let rCount = 0, newCount = 0, ft = performance.now()
-
   function start() {
-    rCount = 0; newCount = 0; ft = performance.now()
     const render = () => {
       raf = requestAnimationFrame(render)
       if (!ctx) return
-      rCount++
 
       if (pending) {
         if (bmp) bmp.close()
         bmp = pending
         pending = null
-        newCount++
         canvas.width = bmp.width
         canvas.height = bmp.height
       }
 
       if (bmp) ctx.drawImage(bmp, 0, 0)
-
-      if (performance.now() - ft >= 2000) {
-        console.log('📺 视频帧:' + Math.round(newCount / 2) + 'fps | 刷新:' + Math.round(rCount / 2) + 'fps')
-        rCount = 0; newCount = 0; ft = performance.now()
-      }
     }
     raf = requestAnimationFrame(render)
   }

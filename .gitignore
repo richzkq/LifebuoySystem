@@ -39,3 +39,7 @@ build/
 ### VS Code ###
 .vscode/
 frontend/dist/
+
+
+
+data/
