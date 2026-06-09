@@ -7,7 +7,6 @@ import asyncio
 import websockets
 import queue
 
-from watchfiles import awatch, Change
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,8 +54,8 @@ elif not os.path.exists(AI_MODEL_OUTPUT):
 
 FRAME_DIR   = RAMDISK_DIR
 KEEP_RECENT = 10
-# 30帧缓冲，awatch 批量通知也不丢帧
-QUEUE_SIZE  = 30
+# 永远只发最新帧，旧帧全部丢弃
+QUEUE_SIZE  = 2   # 最小队列，push_loop 自己排空
 
 new_frame_queue = queue.Queue(maxsize=QUEUE_SIZE)
 
@@ -106,29 +105,24 @@ def read_and_pack(path):
 # 文件监听协程
 # =========================================================
 async def file_watcher():
-    logger.info("文件监听启动，目录: %s (内存盘)", FRAME_DIR)
+    logger.info("文件轮询启动，目录: %s (内存盘)", FRAME_DIR)
+    seen = set()
 
-    async for changes in awatch(FRAME_DIR):
-        for change_type, path in changes:
-            if change_type not in (Change.added, Change.modified):
-                continue
-            if not path.endswith(".jpg"):
-                continue
-
-            # 内存盘：文件写完即完整，直接入队无需等待
-            # 队列满时丢弃最旧的帧（不阻塞）
-            try:
-                new_frame_queue.put_nowait(path)
-            except queue.Full:
+    while True:
+        try:
+            for f in sorted(os.listdir(FRAME_DIR)):
+                if not f.endswith(".jpg") or f in seen:
+                    continue
+                seen.add(f)
                 try:
-                    old = new_frame_queue.get_nowait()
-                    new_frame_queue.task_done()
-                except queue.Empty:
-                    pass
-                try:
-                    new_frame_queue.put_nowait(path)
+                    new_frame_queue.put_nowait(os.path.join(FRAME_DIR, f))
                 except queue.Full:
                     pass
+            if len(seen) > 200:
+                seen.clear()
+        except Exception:
+            pass
+        await asyncio.sleep(0.02)  # 20ms 轮询，无合并延迟
 
 
 # =========================================================
@@ -163,19 +157,25 @@ async def push_loop():
                             break
                         continue
 
+                    # 清空队列：跳过所有旧帧，只保留最新
+                    while not new_frame_queue.empty():
+                        try:
+                            newer = new_frame_queue.get_nowait()
+                            new_frame_queue.task_done()
+                            path = newer
+                        except queue.Empty:
+                            break
+
                     if not os.path.exists(path):
                         continue
 
                     try:
-                        # 读文件 + 打包放线程池（内存盘读取 < 1ms）
                         payload = await loop.run_in_executor(None, read_and_pack, path)
                         if payload is None:
                             logger.warning("空文件跳过: %s", os.path.basename(path))
                             continue
 
-                        await ws.send(payload)
-                        logger.info("推图成功 %s (%.1fKB)",
-                                     os.path.basename(path), len(payload) / 1024)
+                        await asyncio.wait_for(ws.send(payload), timeout=0.25)
 
                         clean_counter += 1
                         if clean_counter >= 100:
