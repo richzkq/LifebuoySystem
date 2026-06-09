@@ -193,7 +193,6 @@ try:
             continue
 
         line = line.strip()
-        print(line)
 
         # ── 新帧标记：上一帧解析完成，做上传决策 ──
         m = RE_FRAME.search(line)

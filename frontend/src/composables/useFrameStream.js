@@ -1,53 +1,70 @@
-/**
- * 浏览器直连帧推送 — 替代 MJPEG，服务器收到帧后直接推给浏览器
- * 延迟：RK3588 → 浏览器，零中间缓冲
- */
-import { ref, onUnmounted } from 'vue'
+import { onUnmounted } from 'vue'
 
 export function useFrameStream(deviceId) {
-  const frameUrl = ref('')
-  let ws = null
+  let ws = null, canvas = null, ctx = null, raf = null
+  let bmp = null, pending = null
 
   function connect() {
-    const url = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws-browser-frame`
-    ws = new WebSocket(url)
+    const host = window.location.host
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${host}/ws-browser-frame`)
     ws.binaryType = 'arraybuffer'
 
     ws.onopen = () => {
-      // 首条消息告诉服务器要订阅的设备
       ws.send(deviceId.value)
-    }
-
-    ws.onmessage = (event) => {
-      // 收到原始 JPEG 字节 → 转 blob URL → 更新 img
-      const blob = new Blob([event.data], { type: 'image/jpeg' })
-      const url = URL.createObjectURL(blob)
-      // 释放旧 URL 防止内存泄漏
-      if (frameUrl.value) {
-        URL.revokeObjectURL(frameUrl.value)
+      if (!canvas) {
+        canvas = document.createElement('canvas')
+        canvas.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:16px;display:block;'
+        const c = document.getElementById('frameContainer')
+        if (c) { c.innerHTML = ''; c.appendChild(canvas); ctx = canvas.getContext('2d') }
       }
-      frameUrl.value = url
+      start()
     }
 
-    ws.onclose = () => {
-      // 断线重连
-      setTimeout(connect, 1000)
+    // 收到帧 → 解码 → 替换 pending
+    ws.onmessage = (e) => {
+      createImageBitmap(new Blob([e.data], { type: 'image/jpeg' }))
+        .then(b => { if (pending) pending.close(); pending = b })
+        .catch(() => {})
     }
+
+    ws.onclose = () => { stop(); setTimeout(connect, 500) }
   }
 
-  function disconnect() {
-    if (ws) {
-      ws.onclose = null // 阻止自动重连
-      ws.close()
-      ws = null
+  let rCount = 0, newCount = 0, ft = performance.now()
+
+  function start() {
+    rCount = 0; newCount = 0; ft = performance.now()
+    const render = () => {
+      raf = requestAnimationFrame(render)
+      if (!ctx) return
+      rCount++
+
+      if (pending) {
+        if (bmp) bmp.close()
+        bmp = pending
+        pending = null
+        newCount++
+        canvas.width = bmp.width
+        canvas.height = bmp.height
+      }
+
+      if (bmp) ctx.drawImage(bmp, 0, 0)
+
+      if (performance.now() - ft >= 2000) {
+        console.log('📺 视频帧:' + Math.round(newCount / 2) + 'fps | 刷新:' + Math.round(rCount / 2) + 'fps')
+        rCount = 0; newCount = 0; ft = performance.now()
+      }
     }
-    if (frameUrl.value) {
-      URL.revokeObjectURL(frameUrl.value)
-      frameUrl.value = ''
-    }
+    raf = requestAnimationFrame(render)
   }
 
+  function stop() {
+    if (raf) { cancelAnimationFrame(raf); raf = null }
+    if (bmp) { bmp.close(); bmp = null }
+    if (pending) { pending.close(); pending = null }
+  }
+
+  function disconnect() { if (ws) { ws.onclose = null; ws.close(); ws = null }; stop() }
   onUnmounted(disconnect)
-
-  return { frameUrl, connect, disconnect }
+  return { frameUrl: null, connect, disconnect }
 }

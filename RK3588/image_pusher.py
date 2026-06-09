@@ -55,7 +55,8 @@ elif not os.path.exists(AI_MODEL_OUTPUT):
 
 FRAME_DIR   = RAMDISK_DIR
 KEEP_RECENT = 10
-QUEUE_SIZE  = 3
+# 30帧缓冲，awatch 批量通知也不丢帧
+QUEUE_SIZE  = 30
 
 new_frame_queue = queue.Queue(maxsize=QUEUE_SIZE)
 
