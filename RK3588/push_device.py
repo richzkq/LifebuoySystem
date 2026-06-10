@@ -59,6 +59,7 @@ ALARM_COOLDOWN_SEC   = 5    # N 秒内不重复报警
 # 正则
 # =========================================================
 RE_FRAME          = re.compile(r"=+\s*帧\s*(\d+)\s*=+")
+RE_TEMP           = re.compile(r"温度:\s*([\d.]+)")
 RE_DROWNING_COUNT = re.compile(r"Drowning=(\d+)")
 RE_PERSON_COUNT   = re.compile(r"Person out of water=(\d+)")
 RE_CALL           = re.compile(r"CallforHelp\s*=\s*(\d+)")
@@ -87,6 +88,7 @@ def do_upload(data):
         "callForHelp":   str(data["callForHelp"]),
         "pressure":      str(data["pressure"]),
         "alarm":         str(data["alarm"]),
+        "temperature":   str(data.get("temperature", 0.0)),
         "targets":       json.dumps(data["targets"], ensure_ascii=False),
     }
     try:
@@ -207,6 +209,7 @@ try:
                 "callForHelp":      0,
                 "pressure":         0,
                 "alarm":            0,
+                "temperature":      0.0,
                 "targets":          [],
             }
             continue
@@ -232,6 +235,10 @@ try:
         m = RE_PRESSURE.search(line)
         if m:
             frame_data["pressure"] = int(m.group(1))
+
+        m = RE_TEMP.search(line)
+        if m:
+            frame_data["temperature"] = float(m.group(1))
 
         m = RE_TARGET.search(line)
         if m:

@@ -48,6 +48,7 @@
 
       <view class="footer-section">
         <text class="footer-device-id">📡 当前终端 ID : {{ deviceId }}</text>
+        <text class="footer-temp" v-if="temperature">🌡 设备温度: {{ temperature }}°C</text>
         <text class="footer-secure-text">🔒 连通自建 Web 端：47.83.199.93</text>
       </view>
 
@@ -64,6 +65,7 @@ const drowningCount   = ref(0)
 const heardCallCount  = ref(0)
 const pressureStatus  = ref(0)
 const isAlarm         = ref(0)
+const temperature     = ref(null)
 const systemMessage   = ref('初始化连接中...')
 const callAlarmActive = ref(false)
 
@@ -141,6 +143,7 @@ const fetchLiveStatus = () => {
         heardCallCount.value = parseInt(data['callForHelp']   || 0)
         pressureStatus.value = parseInt(data['pressure']      || 0)
         isAlarm.value        = parseInt(data['alarm']         || 0)
+        temperature.value    = data['temperature'] || null
 
         // 视觉报警：从无到有时播报
         const visionNow = drowningCount.value > 0 && pressureStatus.value !== 1
@@ -373,6 +376,12 @@ onUnmounted(() => {
   font-size: 12px;
   color: #95A5A6;
   font-weight: 600;
+}
+.footer-temp {
+  font-size: 12px;
+  color: #F39C12;
+  font-weight: 600;
+  margin-top: 2px;
 }
 .footer-secure-text {
   font-size: 11px;

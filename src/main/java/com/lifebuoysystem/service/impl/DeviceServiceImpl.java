@@ -42,7 +42,7 @@ public class DeviceServiceImpl implements DeviceService {
     @Override
     public String processUpload(String deviceId, Integer frameNo, Integer drowningCount,
                                 Integer personCount, Integer callForHelp, Integer pressure,
-                                Integer alarm, String targetsJson, MultipartFile file) {
+                                Integer alarm, Double temperature, String targetsJson, MultipartFile file) {
         try {
             // 构建 DeviceStatus
             DeviceStatus status = new DeviceStatus();
@@ -53,6 +53,7 @@ public class DeviceServiceImpl implements DeviceService {
             status.setCallForHelp(callForHelp);
             status.setPressure(pressure);
             status.setAlarm(alarm);
+            status.setTemperature(temperature);
             status.setUploadTime(LocalDateTime.now());
 
             // ============ 1. 溺水写库（边沿检测，防刷屏） ============
