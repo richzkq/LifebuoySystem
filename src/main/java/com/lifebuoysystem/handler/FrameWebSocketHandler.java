@@ -1,6 +1,7 @@
 package com.lifebuoysystem.handler;
 
 import com.lifebuoysystem.entity.DeviceStatus;
+import com.lifebuoysystem.service.DeviceService;
 import com.lifebuoysystem.service.FrameService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,10 @@ public class FrameWebSocketHandler extends BinaryWebSocketHandler {
     @Lazy
     private SimpMessagingTemplate messagingTemplate;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    @Lazy
+    private DeviceService deviceService;
+
     /** 每设备帧计数器，代替 model 输出的 frameNo */
     private final Map<String, AtomicInteger> frameCounters = new ConcurrentHashMap<>();
 
@@ -67,13 +72,21 @@ public class FrameWebSocketHandler extends BinaryWebSocketHandler {
             // 2. 推视频给浏览器
             browserFrameHandler.broadcast(deviceId, jpgBytes);
 
-            // 3. 推元数据到 STOMP（设备名 + 帧号）
+            // 3. 推元数据到 STOMP（设备名 + 帧号 + 温度）
             int frameNo = frameCounters.computeIfAbsent(deviceId, k -> new AtomicInteger()).incrementAndGet();
 
             DeviceStatus status = new DeviceStatus();
             status.setDeviceId(deviceId);
             status.setFrameNo(frameNo);
             status.setUploadTime(LocalDateTime.now());
+
+            // 从缓存取温度（由 push_device 上传的元数据写入）
+            if (deviceService != null) {
+                DeviceStatus cached = deviceService.getLatestStatus(deviceId);
+                if (cached != null && cached.getTemperature() != null) {
+                    status.setTemperature(cached.getTemperature());
+                }
+            }
 
             messagingTemplate.convertAndSend("/topic/frames/" + deviceId, status);
 

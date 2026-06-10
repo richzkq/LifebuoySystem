@@ -6,6 +6,7 @@ import time
 import logging
 import threading
 from logging.handlers import RotatingFileHandler
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -79,26 +80,32 @@ def compute_alarm(data):
 # =========================================================
 # 上传（同步，低频调用）
 # =========================================================
+_upload_pool = ThreadPoolExecutor(max_workers=1)
+
 def do_upload(data):
-    form = {
-        "deviceId":      DEVICE_ID,
-        "frameNo":       str(data["frameNo"]),
-        "drowningCount": str(data["drowningCount"]),
-        "personCount":   str(data["drowningCount"] + data["personOutOfWater"]),
-        "callForHelp":   str(data["callForHelp"]),
-        "pressure":      str(data["pressure"]),
-        "alarm":         str(data["alarm"]),
-        "temperature":   str(data.get("temperature", 0.0)),
-        "targets":       json.dumps(data["targets"], ensure_ascii=False),
-    }
-    try:
-        r = session.post(SERVER_URL, data=form, timeout=10)
-        r.raise_for_status()
-        logger.info("上传成功 frame=%s drowning=%s call=%s pressure=%s alarm=%s",
-                     data["frameNo"], data["drowningCount"],
-                     data["callForHelp"], data["pressure"], data["alarm"])
-    except Exception as e:
-        logger.error("上传失败 frame=%s: %s", data["frameNo"], e)
+    """异步上传，不阻塞主循环"""
+    def _post():
+        form = {
+            "deviceId":      DEVICE_ID,
+            "frameNo":       str(data["frameNo"]),
+            "drowningCount": str(data["drowningCount"]),
+            "personCount":   str(data["drowningCount"] + data["personOutOfWater"]),
+            "callForHelp":   str(data["callForHelp"]),
+            "pressure":      str(data["pressure"]),
+            "alarm":         str(data["alarm"]),
+            "temperature":   str(data.get("temperature", 0.0)),
+            "targets":       json.dumps(data["targets"], ensure_ascii=False),
+        }
+        try:
+            r = session.post(SERVER_URL, data=form, timeout=10)
+            r.raise_for_status()
+            logger.info("上传成功 frame=%s drowning=%s call=%s pressure=%s alarm=%s",
+                         data["frameNo"], data["drowningCount"],
+                         data["callForHelp"], data["pressure"], data["alarm"])
+        except Exception as e:
+            logger.error("上传失败 frame=%s: %s", data["frameNo"], e)
+
+    _upload_pool.submit(_post)
 
 # =========================================================
 # 报警去重状态
@@ -108,11 +115,12 @@ alarm_sent           = False # 当前溺水事件是否已上传
 last_alarm_upload    = 0     # 上次报警上传时间戳
 last_call_for_help   = 0     # 上一帧呼救声
 last_pressure        = 0     # 上一帧压力
+last_temp_upload     = 0     # 上次温度上传时间戳
 
 def upload_decision(frame_data):
     """每帧解析完成后调用，决定是否上传"""
     global consecutive_drowning, alarm_sent, last_alarm_upload
-    global last_call_for_help, last_pressure
+    global last_call_for_help, last_pressure, last_temp_upload
 
     now = time.time()
     uploaded = False
@@ -161,6 +169,12 @@ def upload_decision(frame_data):
             alarm_sent = True
             last_alarm_upload = now
             uploaded = True
+
+    # ──── 4. 温度心跳：每5秒上传一次 ────
+    if now - last_temp_upload >= 5.0:
+        frame_data["alarm"] = compute_alarm(frame_data)
+        do_upload(frame_data)
+        last_temp_upload = now
 
     return uploaded
 
