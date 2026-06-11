@@ -1,45 +1,54 @@
 @startuml
+title 多端溺水监测与报警系统架构
 
-left to right direction
-
-rectangle "传统MJPEG方案" {
-
-    [Camera]
-    [HTTP轮询]
-    [Base64编码]
-    [Browser]
-
-    Camera --> HTTP轮询
-    HTTP轮询 --> Base64编码
-    Base64编码 --> Browser
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor Black
 }
 
-rectangle "本系统方案" {
+actor "设备端\n(摄像头/边缘设备)" as Device
 
-    [RK3568]
-    [二进制封包]
-    [WebSocket]
-    [createImageBitmap]
-    [Canvas]
+rectangle "Web端\nVue3 + Element Plus + Pinia" as Web
+rectangle "移动端\nUni-App" as Mobile
 
-    RK3568 --> 二进制封包
-    二进制封包 --> WebSocket
-    WebSocket --> createImageBitmap
-    createImageBitmap --> Canvas
-}
+rectangle "后端服务\n事件处理/报警中心" as Backend
 
-note bottom
+rectangle "STOMP over WebSocket\n设备状态通道" as WS1
+rectangle "视频流WebSocket\n专用帧传输" as WS2
 
-MJPEG:
-轮询请求频繁
-Base64增加33%体积
-延迟约200ms+
+rectangle "Glassmorphism\n报警弹窗UI" as UI
 
-本系统:
-二进制传输
-无Base64开销
-端到端延迟<20ms
+rectangle "Android原生TTS引擎\n(TextToSpeech)" as TTS
 
+rectangle "事件类型\n- 溺水报警\n- 呼救检测\n- 救援完成" as Event
+
+Device --> Backend : 视频流/状态数据
+
+Backend --> WS1 : 状态/报警事件
+Backend --> WS2 : 视频帧流
+
+WS1 --> Web : 设备状态 + 报警
+WS2 --> Web : 实时视频流
+
+Web --> UI : 触发报警弹窗
+
+Backend --> Mobile : 报警事件推送
+
+Mobile --> TTS : 语音播报
+TTS --> Mobile : 播报结果
+
+Backend --> Event : 事件分类处理
+Event --> Backend
+
+note right of Web
+Glassmorphism：
+半透明 + 模糊背景
+用于紧急报警提示
+end note
+
+note right of Mobile
+解决H5 SpeechSynthesis
+移动端兼容性差问题
 end note
 
 @enduml
