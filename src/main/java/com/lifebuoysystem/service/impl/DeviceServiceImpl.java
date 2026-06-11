@@ -61,14 +61,9 @@ public class DeviceServiceImpl implements DeviceService {
             // ============ 1. 溺水写库（边沿检测 + 已有未确认报警则不重复写入） ============
             boolean nowDrowning = drowningCount != null && drowningCount > 0;
             boolean wasDrowning = lastDrowning.getOrDefault(deviceId, false);
-            int pending = alarmRecordMapper.countPending(deviceId);
 
-            log.info("[报警判定] device={} nowDrowning={} wasDrowning={} pending={} alarm={}",
-                     deviceId, nowDrowning, wasDrowning, pending, alarm);
-
-            if (nowDrowning && !wasDrowning && pending == 0) {
+            if (nowDrowning && !wasDrowning && alarmRecordMapper.countPending(deviceId) == 0) {
                 alarmRecordMapper.insert(deviceId, "Drowning", "PENDING");
-                log.warn("[报警写入] device={} 新增 PENDING 记录", deviceId);
             }
             lastDrowning.put(deviceId, nowDrowning);
 
