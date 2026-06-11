@@ -1,76 +1,27 @@
 @startuml
 
-skinparam shadowing false
+left to right direction
 
-package "感知层" {
+rectangle "麦克风阵列" as Mic
 
-    rectangle "工业摄像头" as Camera
+rectangle "音频预处理" as Pre
 
-    rectangle "麦克风阵列" as Mic
+rectangle "梅尔频谱特征提取" as Mel
 
-    rectangle "压力传感器" as Pressure
+rectangle "DNN呼救声识别" as DNN
 
-    rectangle "RK3568边缘终端" as RK
-}
+rectangle "呼救声概率输出" as Prob
 
-package "边缘AI处理" {
+rectangle "多模态融合决策" as Fusion
 
-    rectangle "YOLOv8溺水识别" as YOLO
+Mic --> Pre
 
-    rectangle "呼救声识别" as Audio
+Pre --> Mel
 
-    rectangle "多模态融合" as Fusion
-}
+Mel --> DNN
 
-package "云平台" {
+DNN --> Prob
 
-    rectangle "SpringBoot服务器" as Spring
-
-    rectangle "报警决策模块" as Alarm
-
-    database "MySQL" as DB
-
-    rectangle "MQTT Broker" as Broker
-}
-
-package "执行层" {
-
-    rectangle "servo控制节点" as ESP
-
-    rectangle "舵机执行机构" as Servo
-}
-
-package "应用层" {
-
-    rectangle "Web管理端" as Web
-
-    rectangle "Uni-App移动端" as App
-}
-
-Camera --> RK
-Mic --> RK
-Pressure --> RK
-
-RK --> YOLO
-RK --> Audio
-
-YOLO --> Fusion
-Audio --> Fusion
-
-Fusion --> Spring : HTTP
-
-Spring --> Alarm
-
-Alarm --> DB
-
-Alarm --> Broker
-
-Broker --> ESP
-
-ESP --> Servo
-
-Spring --> Web
-
-Spring --> App
+Prob --> Fusion
 
 @enduml

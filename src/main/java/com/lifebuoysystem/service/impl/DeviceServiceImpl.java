@@ -29,6 +29,7 @@ public class DeviceServiceImpl implements DeviceService {
     // ============ 内存缓存 ============
     private final Map<String, DeviceStatus> deviceCache = new ConcurrentHashMap<>();
     private final Map<String, Boolean> lastDrowning = new ConcurrentHashMap<>();
+    private final Map<String, Integer> lastPressure = new ConcurrentHashMap<>();
     private final Map<String, Long> lastCallForHelpTime = new ConcurrentHashMap<>();
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -55,14 +56,25 @@ public class DeviceServiceImpl implements DeviceService {
             status.setTemperature(temperature);
             status.setUploadTime(LocalDateTime.now());
 
-            // ============ 1. 溺水写库（边沿检测，防刷屏） ============
+            // ============ 1. 溺水写库（边沿检测 + 已有未确认报警则不重复写入） ============
             boolean nowDrowning = drowningCount != null && drowningCount > 0;
             boolean wasDrowning = lastDrowning.getOrDefault(deviceId, false);
 
-            if (nowDrowning && !wasDrowning) {
+            if (nowDrowning && !wasDrowning && alarmRecordMapper.countPending(deviceId) == 0) {
                 alarmRecordMapper.insert(deviceId, "Drowning", "PENDING");
             }
             lastDrowning.put(deviceId, nowDrowning);
+
+            // ============ 1a. 压力传感器触发 → 自动确认报警 ============
+            int nowPressure = pressure != null ? pressure : 0;
+            int wasPressure = lastPressure.getOrDefault(deviceId, 0);
+            if (nowPressure == 1 && wasPressure == 0) {
+                int rows = alarmRecordMapper.autoCompleteByPressure(deviceId);
+                if (rows > 0) {
+                    log.info("设备 {} 压力传感器触发，自动确认 {} 条报警", deviceId, rows);
+                }
+            }
+            lastPressure.put(deviceId, nowPressure);
 
             // ============ 1b. 连续多帧溺水检测 → 舵机释放 ============
             servoService.onFrameProcessed(deviceId, drowningCount, alarm);
