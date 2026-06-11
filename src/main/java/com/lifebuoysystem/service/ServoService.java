@@ -13,8 +13,9 @@ public interface ServoService {
      * 由 DeviceServiceImpl 每帧调用
      * @param deviceId      设备 ID
      * @param drowningCount 当前帧溺水人数 (null 表示无数据)
+     * @param alarm         综合报警值 (0=无报警，pressure=1 时强制为 0)
      */
-    void onFrameProcessed(String deviceId, Integer drowningCount);
+    void onFrameProcessed(String deviceId, Integer drowningCount, Integer alarm);
 
     /**
      * 手动触发舵机 (用于测试)

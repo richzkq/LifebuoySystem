@@ -51,16 +51,16 @@ DROWNING_MODEL = "/home/elf/demo/dummy_int8.rknn"
 PERSON_MODEL   = "/home/elf/demo/yolov8n_int8.rknn"
 
 # =========================================================
-# 报警阈值
+# 报警阈值（模型已做连续帧确认，此处仅冷却去重）
 # =========================================================
-CONSECUTIVE_DROWNING = 3    # 连续 N 帧溺水 → 报警上传
-ALARM_COOLDOWN_SEC   = 5    # N 秒内不重复报警
+ALARM_COOLDOWN_SEC = 30    # 两次溺水报警之间最少间隔（秒）
 
 # =========================================================
 # 正则
 # =========================================================
 RE_FRAME          = re.compile(r"=+\s*帧\s*(\d+)\s*=+")
-RE_TEMP           = re.compile(r"温度:\s*([\d.]+)")
+RE_TEMP_LINE      = re.compile(r"\[TEMP\]\s*([\d.]+)")      # 帧间温度： [TEMP] 33.3°C state=NORMAL
+RE_TEMP           = re.compile(r"温度:\s*([\d.]+)")          # 帧内温度： 温度: 33.3°C
 RE_DROWNING_COUNT = re.compile(r"Drowning=(\d+)")
 RE_PERSON_COUNT   = re.compile(r"Person out of water=(\d+)")
 RE_CALL           = re.compile(r"CallforHelp\s*=\s*(\d+)")
@@ -99,31 +99,26 @@ def do_upload(data):
         try:
             r = session.post(SERVER_URL, data=form, timeout=10)
             r.raise_for_status()
-            logger.info("上传成功 frame=%s drowning=%s call=%s pressure=%s alarm=%s",
-                         data["frameNo"], data["drowningCount"],
-                         data["callForHelp"], data["pressure"], data["alarm"])
         except Exception as e:
             logger.error("上传失败 frame=%s: %s", data["frameNo"], e)
 
     _upload_pool.submit(_post)
 
 # =========================================================
-# 报警去重状态
+# 上传状态（去重用）
 # =========================================================
-consecutive_drowning = 0     # 连续溺水帧计数
-alarm_sent           = False # 当前溺水事件是否已上传
-last_alarm_upload    = 0     # 上次报警上传时间戳
-last_call_for_help   = 0     # 上一帧呼救声
-last_pressure        = 0     # 上一帧压力
-last_temp_upload     = 0     # 上次温度上传时间戳
+drowning_active    = False  # 当前是否处于溺水报警状态
+last_alarm_upload  = 0      # 上次溺水报警上传时间戳
+last_call_for_help = 0      # 上一帧呼救声
+last_pressure      = 0      # 上一帧压力
+last_temp_upload   = 0      # 上次温度心跳上传时间戳
 
 def upload_decision(frame_data):
-    """每帧解析完成后调用，决定是否上传"""
-    global consecutive_drowning, alarm_sent, last_alarm_upload
+    """每帧解析完成后调用。模型已做多帧确认，此处仅冷却去重"""
+    global drowning_active, last_alarm_upload
     global last_call_for_help, last_pressure, last_temp_upload
 
     now = time.time()
-    uploaded = False
 
     # ──── 1. 呼救声：状态变化即上传 ────
     call = frame_data["callForHelp"]
@@ -132,7 +127,6 @@ def upload_decision(frame_data):
         logger.info("🔊 呼救声变化 %d→%d，立即上传", last_call_for_help, call)
         do_upload(frame_data)
         last_call_for_help = call
-        uploaded = True
 
     # ──── 2. 压力传感器：状态变化即上传 ────
     pres = frame_data["pressure"]
@@ -141,42 +135,34 @@ def upload_decision(frame_data):
         logger.info("⚓ 压力传感器变化 %d→%d，立即上传", last_pressure, pres)
         do_upload(frame_data)
         last_pressure = pres
-        uploaded = True
 
-    # ──── 3. 溺水报警：连续 N 帧才上传 ────
+    # ──── 3. 溺水报警：模型已确认，这里仅冷却去重 ────
     drowning = frame_data["drowningCount"]
 
-    if drowning > 0:
-        consecutive_drowning += 1
-    else:
-        # 溺水中断 → 重置
-        if consecutive_drowning >= CONSECUTIVE_DROWNING and alarm_sent:
-            # 之前发过报警，现在溺水结束 → 发一帧 "解除" 通知
-            frame_data["alarm"] = 0
-            logger.info("✅ 溺水结束 frame=%s，上传解除", frame_data["frameNo"])
-            do_upload(frame_data)
-            uploaded = True
-        consecutive_drowning = 0
-        alarm_sent = False
-
-    # 达到阈值 + 未重复 + 冷却已过
-    if consecutive_drowning >= CONSECUTIVE_DROWNING and not alarm_sent:
+    if drowning > 0 and not drowning_active:
+        # 模型首次输出溺水 → 上传报警
         if now - last_alarm_upload >= ALARM_COOLDOWN_SEC:
             frame_data["alarm"] = 1
-            logger.warning("🛟 溺水报警! 连续%d帧, frame=%s",
-                           consecutive_drowning, frame_data["frameNo"])
+            logger.warning("🛟 溺水报警! frame=%s drowning=%d",
+                           frame_data["frameNo"], drowning)
             do_upload(frame_data)
-            alarm_sent = True
+            drowning_active = True
             last_alarm_upload = now
-            uploaded = True
+        else:
+            logger.info("溺水报警冷却中，跳过 (距上次 %d 秒)", int(now - last_alarm_upload))
 
-    # ──── 4. 温度心跳：每5秒上传一次 ────
+    elif drowning == 0 and drowning_active:
+        # 模型溺水结束 → 上传解除
+        frame_data["alarm"] = 0
+        logger.info("✅ 溺水结束 frame=%s，上传解除", frame_data["frameNo"])
+        do_upload(frame_data)
+        drowning_active = False
+
+    # ──── 4. 温度心跳：每5秒上传一次（无论是否有事件） ────
     if now - last_temp_upload >= 5.0:
         frame_data["alarm"] = compute_alarm(frame_data)
         do_upload(frame_data)
         last_temp_upload = now
-
-    return uploaded
 
 # =========================================================
 # 启动模型
@@ -197,6 +183,7 @@ threading.Thread(target=lambda: [logger.error("[STDERR] %s", l.strip())
 # 主循环
 # =========================================================
 frame_data = None
+global_temp = 0.0  # 帧间温度缓存（[TEMP] 行更新）
 
 try:
     while True:
@@ -210,10 +197,39 @@ try:
 
         line = line.strip()
 
+        # ── 帧间温度：[TEMP] 33.3°C state=NORMAL ──
+        m = RE_TEMP_LINE.search(line)
+        if m:
+            global_temp = float(m.group(1))
+            # 驱动温度心跳（无论当前是否有帧）
+            now = time.time()
+            if now - last_temp_upload >= 5.0:
+                if frame_data is not None:
+                    frame_data["alarm"] = compute_alarm(frame_data)
+                    frame_data["temperature"] = global_temp
+                    do_upload(frame_data)
+                else:
+                    heartbeat = {
+                        "frameNo":       0,
+                        "drowningCount": 0,
+                        "personOutOfWater": 0,
+                        "callForHelp":   0,
+                        "pressure":      0,
+                        "alarm":         1 if drowning_active else 0,
+                        "temperature":   global_temp,
+                        "targets":       [],
+                    }
+                    do_upload(heartbeat)
+                last_temp_upload = now
+            continue
+
         # ── 新帧标记：上一帧解析完成，做上传决策 ──
         m = RE_FRAME.search(line)
         if m:
             if frame_data is not None:
+                # 如果帧内没单独解析到温度，用全局缓存
+                if frame_data["temperature"] == 0.0:
+                    frame_data["temperature"] = global_temp
                 upload_decision(frame_data)
 
             frame_data = {
@@ -223,7 +239,7 @@ try:
                 "callForHelp":      0,
                 "pressure":         0,
                 "alarm":            0,
-                "temperature":      0.0,
+                "temperature":      global_temp,  # 预填全局温度
                 "targets":          [],
             }
             continue
@@ -253,6 +269,7 @@ try:
         m = RE_TEMP.search(line)
         if m:
             frame_data["temperature"] = float(m.group(1))
+            global_temp = frame_data["temperature"]
 
         m = RE_TARGET.search(line)
         if m:

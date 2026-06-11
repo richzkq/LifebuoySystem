@@ -37,6 +37,6 @@ mqtt:
 
 # ============ 舵机 / 救生圈释放 ============
 servo:
-  consecutive-threshold: 5      # 连续 N 帧检测到溺水才触发舵机
+  consecutive-threshold: 1      # 立即触发（RK3588 已做 3 帧溺水确认，服务器不需要再等）
   cooldown-ms: 30000            # 两次触发之间的冷却时间 (毫秒)
   mqtt-topic-prefix: "lifebuoy/servo"

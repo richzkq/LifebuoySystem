@@ -2,6 +2,7 @@ import os
 import json
 import struct
 import shutil
+import time
 import logging
 import asyncio
 import websockets
@@ -144,7 +145,6 @@ async def file_watcher():
 async def push_loop():
     loop = asyncio.get_running_loop()
     send_count = 0
-    fps_t0 = 0
 
     while True:
         try:
@@ -155,7 +155,7 @@ async def push_loop():
                 max_size=512 * 1024,
             ) as ws:
                 logger.info("WS推流连接成功")
-                fps_t0 = send_count = 0
+                send_count = 0
 
                 while True:
                     try:
@@ -195,10 +195,6 @@ async def push_loop():
 
                         send_count += 1
 
-                        # 每 100 帧清一次旧帧
-                        if send_count % 100 == 0:
-                            await loop.run_in_executor(None, cleanup_dir, KEEP_RECENT)
-
                     except websockets.ConnectionClosed:
                         logger.warning("WS断开，重连...")
                         break
@@ -208,6 +204,14 @@ async def push_loop():
         except Exception as e:
             logger.error("WS连接失败: %s，3秒后重试", e)
             await asyncio.sleep(3)
+
+
+async def cleanup_loop():
+    """每 2 秒清理一次旧帧，与推送速率完全解耦"""
+    loop = asyncio.get_running_loop()
+    while True:
+        await asyncio.sleep(2)
+        await loop.run_in_executor(None, cleanup_dir, KEEP_RECENT)
 
 
 async def main():
@@ -220,7 +224,7 @@ async def main():
                 pass
     logger.info("启动时清空旧帧完成")
 
-    await asyncio.gather(file_watcher(), push_loop())
+    await asyncio.gather(file_watcher(), push_loop(), cleanup_loop())
 
 
 if __name__ == "__main__":

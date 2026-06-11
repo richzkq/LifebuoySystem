@@ -66,7 +66,7 @@ public class DeviceServiceImpl implements DeviceService {
             lastDrowning.put(deviceId, nowDrowning);
 
             // ============ 1b. 连续多帧溺水检测 → 舵机释放 ============
-            servoService.onFrameProcessed(deviceId, drowningCount);
+            servoService.onFrameProcessed(deviceId, drowningCount, alarm);
 
             // ============ 2. 实时状态推送（WebSocket） ============
             messagingTemplate.convertAndSend("/topic/frames/" + deviceId, status);
@@ -136,9 +136,9 @@ public class DeviceServiceImpl implements DeviceService {
         if (lastCall != null && System.currentTimeMillis() - lastCall < 30000) {
             status.setCallForHelp(1);
         }
-        // 报警锁存：最近5秒内有过报警，就持续返回1（uni-app/舵机轮询用）
+        // 报警锁存：最近15秒内有过报警，就持续返回1（心跳5秒一次，3倍余量）
         Long lastAlarm = lastAlarmTime.get(deviceId);
-        if (lastAlarm != null && System.currentTimeMillis() - lastAlarm < 5000) {
+        if (lastAlarm != null && System.currentTimeMillis() - lastAlarm < 15000) {
             status.setAlarm(1);
         }
         return status;
