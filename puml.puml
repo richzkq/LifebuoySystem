@@ -1,54 +1,44 @@
 @startuml
-title 多端溺水监测与报警系统架构
+title YOLOv8 多策略优化框架（剪枝 + INT8量化 + 时空建模）
 
 skinparam rectangle {
   BackgroundColor White
   BorderColor Black
 }
 
-actor "设备端\n(摄像头/边缘设备)" as Device
+rectangle "原始YOLOv8模型\n约244MB" as BASE
 
-rectangle "Web端\nVue3 + Element Plus + Pinia" as Web
-rectangle "移动端\nUni-App" as Mobile
+rectangle "结构剪枝\n(Pruning)" as PRUNE
+rectangle "INT8量化\n(Quantization)" as INT8
+rectangle "时空上下文建模\n(Temporal-Spatial Modeling)" as TSM
 
-rectangle "后端服务\n事件处理/报警中心" as Backend
+rectangle "轻量化模型\n约89MB" as LIGHT
+rectangle "嵌入式NPU加速推理\nRK3588等" as NPU
 
-rectangle "STOMP over WebSocket\n设备状态通道" as WS1
-rectangle "视频流WebSocket\n专用帧传输" as WS2
+rectangle "检测结果\n(溺水/漂浮/挣扎)" as OUT
 
-rectangle "Glassmorphism\n报警弹窗UI" as UI
+BASE --> PRUNE
+PRUNE --> INT8
+INT8 --> TSM
 
-rectangle "Android原生TTS引擎\n(TextToSpeech)" as TTS
+TSM --> LIGHT
+LIGHT --> NPU
+NPU --> OUT
 
-rectangle "事件类型\n- 溺水报警\n- 呼救检测\n- 救援完成" as Event
-
-Device --> Backend : 视频流/状态数据
-
-Backend --> WS1 : 状态/报警事件
-Backend --> WS2 : 视频帧流
-
-WS1 --> Web : 设备状态 + 报警
-WS2 --> Web : 实时视频流
-
-Web --> UI : 触发报警弹窗
-
-Backend --> Mobile : 报警事件推送
-
-Mobile --> TTS : 语音播报
-TTS --> Mobile : 播报结果
-
-Backend --> Event : 事件分类处理
-Event --> Backend
-
-note right of Web
-Glassmorphism：
-半透明 + 模糊背景
-用于紧急报警提示
+note right of PRUNE
+去除冗余卷积通道
+降低参数量
 end note
 
-note right of Mobile
-解决H5 SpeechSynthesis
-移动端兼容性差问题
+note right of INT8
+FP32 → INT8
+降低计算复杂度
+提升NPU利用率
+end note
+
+note right of TSM
+利用连续帧信息
+增强行为识别能力
 end note
 
 @enduml

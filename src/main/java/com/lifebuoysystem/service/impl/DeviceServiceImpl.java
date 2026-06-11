@@ -147,8 +147,13 @@ public class DeviceServiceImpl implements DeviceService {
         if (lastCall != null && System.currentTimeMillis() - lastCall < 30000) {
             status.setCallForHelp(1);
         }
-        // 报警由数据库 PENDING 记录决定：有未确认 → alarm=1，已确认 → alarm=0
-        status.setAlarm(alarmRecordMapper.countPending(deviceId) > 0 ? 1 : 0);
+        // 报警由数据库 PENDING 记录决定：有未确认 → alarm=1 + 保留溺水数，已确认 → alarm=0 + 溺水数归零
+        if (alarmRecordMapper.countPending(deviceId) > 0) {
+            status.setAlarm(1);
+        } else {
+            status.setAlarm(0);
+            status.setDrowningCount(0);
+        }
         return status;
     }
 }
