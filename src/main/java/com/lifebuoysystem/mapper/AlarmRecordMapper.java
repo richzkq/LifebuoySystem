@@ -29,6 +29,9 @@ public interface AlarmRecordMapper {
                 @Param("alarmType") String alarmType,
                 @Param("status") String status);
 
+    @Select("SELECT * FROM alarm_record WHERE id = #{id}")
+    AlarmRecord findById(@Param("id") Long id);
+
     /** 确认报警完成 */
     @Update("UPDATE alarm_record SET status = 'COMPLETED' WHERE id = #{id}")
     int acknowledge(@Param("id") Long id);

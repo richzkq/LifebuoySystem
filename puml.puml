@@ -2,26 +2,44 @@
 
 left to right direction
 
-rectangle "麦克风阵列" as Mic
+rectangle "传统MJPEG方案" {
 
-rectangle "音频预处理" as Pre
+    [Camera]
+    [HTTP轮询]
+    [Base64编码]
+    [Browser]
 
-rectangle "梅尔频谱特征提取" as Mel
+    Camera --> HTTP轮询
+    HTTP轮询 --> Base64编码
+    Base64编码 --> Browser
+}
 
-rectangle "DNN呼救声识别" as DNN
+rectangle "本系统方案" {
 
-rectangle "呼救声概率输出" as Prob
+    [RK3568]
+    [二进制封包]
+    [WebSocket]
+    [createImageBitmap]
+    [Canvas]
 
-rectangle "多模态融合决策" as Fusion
+    RK3568 --> 二进制封包
+    二进制封包 --> WebSocket
+    WebSocket --> createImageBitmap
+    createImageBitmap --> Canvas
+}
 
-Mic --> Pre
+note bottom
 
-Pre --> Mel
+MJPEG:
+轮询请求频繁
+Base64增加33%体积
+延迟约200ms+
 
-Mel --> DNN
+本系统:
+二进制传输
+无Base64开销
+端到端延迟<20ms
 
-DNN --> Prob
-
-Prob --> Fusion
+end note
 
 @enduml
