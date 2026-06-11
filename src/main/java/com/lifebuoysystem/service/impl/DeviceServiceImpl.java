@@ -8,6 +8,7 @@ import com.lifebuoysystem.mapper.AlarmRecordMapper;
 import com.lifebuoysystem.service.DeviceService;
 import com.lifebuoysystem.service.ServoService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * @author ZKQ
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DeviceServiceImpl implements DeviceService {
