@@ -1,0 +1,76 @@
+@startuml
+
+skinparam shadowing false
+
+package "感知层" {
+
+    rectangle "工业摄像头" as Camera
+
+    rectangle "麦克风阵列" as Mic
+
+    rectangle "压力传感器" as Pressure
+
+    rectangle "RK3568边缘终端" as RK
+}
+
+package "边缘AI处理" {
+
+    rectangle "YOLOv8溺水识别" as YOLO
+
+    rectangle "呼救声识别" as Audio
+
+    rectangle "多模态融合" as Fusion
+}
+
+package "云平台" {
+
+    rectangle "SpringBoot服务器" as Spring
+
+    rectangle "报警决策模块" as Alarm
+
+    database "MySQL" as DB
+
+    rectangle "MQTT Broker" as Broker
+}
+
+package "执行层" {
+
+    rectangle "servo控制节点" as ESP
+
+    rectangle "舵机执行机构" as Servo
+}
+
+package "应用层" {
+
+    rectangle "Web管理端" as Web
+
+    rectangle "Uni-App移动端" as App
+}
+
+Camera --> RK
+Mic --> RK
+Pressure --> RK
+
+RK --> YOLO
+RK --> Audio
+
+YOLO --> Fusion
+Audio --> Fusion
+
+Fusion --> Spring : HTTP
+
+Spring --> Alarm
+
+Alarm --> DB
+
+Alarm --> Broker
+
+Broker --> ESP
+
+ESP --> Servo
+
+Spring --> Web
+
+Spring --> App
+
+@enduml

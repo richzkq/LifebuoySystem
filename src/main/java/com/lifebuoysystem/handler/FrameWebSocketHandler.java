@@ -72,7 +72,7 @@ public class FrameWebSocketHandler extends BinaryWebSocketHandler {
             // 2. 推视频给浏览器
             browserFrameHandler.broadcast(deviceId, jpgBytes);
 
-            // 3. 推元数据到 STOMP（设备名 + 帧号 + 温度）
+            // 3. 推元数据到 STOMP（补全 alarm/drowning/temp 等字段，避免视频帧覆盖报警状态）
             int frameNo = frameCounters.computeIfAbsent(deviceId, k -> new AtomicInteger()).incrementAndGet();
 
             DeviceStatus status = new DeviceStatus();
@@ -80,11 +80,16 @@ public class FrameWebSocketHandler extends BinaryWebSocketHandler {
             status.setFrameNo(frameNo);
             status.setUploadTime(LocalDateTime.now());
 
-            // 从缓存取温度（由 push_device 上传的元数据写入）
+            // 从缓存补全元数据字段（温度、报警、溺水人数等）
             if (deviceService != null) {
                 DeviceStatus cached = deviceService.getLatestStatus(deviceId);
-                if (cached != null && cached.getTemperature() != null) {
+                if (cached != null) {
                     status.setTemperature(cached.getTemperature());
+                    status.setAlarm(cached.getAlarm());
+                    status.setDrowningCount(cached.getDrowningCount());
+                    status.setCallForHelp(cached.getCallForHelp());
+                    status.setPressure(cached.getPressure());
+                    status.setPersonCount(cached.getPersonCount());
                 }
             }
 

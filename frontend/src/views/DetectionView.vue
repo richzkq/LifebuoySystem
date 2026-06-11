@@ -111,8 +111,8 @@
                 {{ a.alarmType }}
               </span>
 
-              <span class="alarm-status">
-                {{ a.status }}
+              <span :class="['alarm-status', a.status === 'PENDING' ? 'alarm-status--pending' : 'alarm-status--done']">
+                {{ a.status === 'PENDING' ? '待处理' : '已处理' }}
               </span>
 
             </div>
@@ -124,6 +124,14 @@
             <div class="alarm-time">
               {{ a.createTime }}
             </div>
+
+            <button
+              v-if="a.status === 'PENDING'"
+              class="acknowledge-btn"
+              @click="handleAcknowledge(a.id)"
+            >
+              确认完成
+            </button>
 
           </div>
 
@@ -154,13 +162,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { getAlarmList } from '@/api/alarm'
+import { getAlarmList, acknowledgeAlarm } from '@/api/alarm'
 import { useFrameStream } from '@/composables/useFrameStream'
 import { DEFAULT_DEVICE_ID } from '@/config'
 
@@ -179,17 +187,24 @@ const { frameUrl, connect: connectFrameStream } = useFrameStream(deviceId)
 // ============ 报警记录 ============
 const alarms = ref([])
 const alarmLoading = ref(false)
+let alarmTimer = null
 
 async function fetchAlarmList() {
-  alarmLoading.value = true
   try {
     const res = await getAlarmList()
     alarms.value = res.data
   } catch (e) {
     console.error('报警列表获取失败', e)
-    ElMessage.error('报警列表加载失败')
-  } finally {
-    alarmLoading.value = false
+  }
+}
+
+async function handleAcknowledge(id) {
+  try {
+    await acknowledgeAlarm(id)
+    ElMessage.success('报警已确认完成')
+    fetchAlarmList()
+  } catch (e) {
+    ElMessage.error('确认失败')
   }
 }
 
@@ -201,9 +216,19 @@ function handleLogout() {
 
 // ============ 生命周期 ============
 onMounted(() => {
-  fetchAlarmList()
+  alarmLoading.value = true
+  fetchAlarmList().finally(() => { alarmLoading.value = false })
+  // 每 5 秒刷新报警列表
+  alarmTimer = setInterval(fetchAlarmList, 5000)
   connect()
   connectFrameStream()
+})
+
+onUnmounted(() => {
+  if (alarmTimer) {
+    clearInterval(alarmTimer)
+    alarmTimer = null
+  }
 })
 </script>
 
@@ -425,6 +450,32 @@ onMounted(() => {
 .alarm-status {
   font-size: 12px;
   color: #10B981;
+}
+
+.alarm-status--pending {
+  color: #EF4444;
+  font-weight: 700;
+}
+
+.alarm-status--done {
+  color: #6B7280;
+}
+
+.acknowledge-btn {
+  margin-top: 8px;
+  padding: 4px 14px;
+  border: 1px solid #10B981;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.acknowledge-btn:hover {
+  background: rgba(16, 185, 129, 0.3);
+  color: #fff;
 }
 
 .alarm-device {

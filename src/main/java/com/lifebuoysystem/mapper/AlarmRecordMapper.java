@@ -2,10 +2,7 @@ package com.lifebuoysystem.mapper;
 
 
 import com.lifebuoysystem.entity.AlarmRecord;
-import org.apache.ibatis.annotations.Insert;
-import org.apache.ibatis.annotations.Mapper;
-import org.apache.ibatis.annotations.Param;
-import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.*;
 
 import java.util.List;
 
@@ -31,4 +28,12 @@ public interface AlarmRecordMapper {
     void insert(@Param("deviceId") String deviceId,
                 @Param("alarmType") String alarmType,
                 @Param("status") String status);
+
+    /** 确认报警完成 */
+    @Update("UPDATE alarm_record SET status = 'COMPLETED' WHERE id = #{id}")
+    int acknowledge(@Param("id") Long id);
+
+    /** 查询某设备是否有未确认的溺水报警 */
+    @Select("SELECT COUNT(*) FROM alarm_record WHERE device_id = #{deviceId} AND alarm_type = 'Drowning' AND status = 'PENDING'")
+    int countPending(@Param("deviceId") String deviceId);
 }

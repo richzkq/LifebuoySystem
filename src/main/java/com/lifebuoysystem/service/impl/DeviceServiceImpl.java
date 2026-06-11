@@ -30,7 +30,6 @@ public class DeviceServiceImpl implements DeviceService {
     private final Map<String, DeviceStatus> deviceCache = new ConcurrentHashMap<>();
     private final Map<String, Boolean> lastDrowning = new ConcurrentHashMap<>();
     private final Map<String, Long> lastCallForHelpTime = new ConcurrentHashMap<>();
-    private final Map<String, Long> lastAlarmTime = new ConcurrentHashMap<>();
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -61,7 +60,7 @@ public class DeviceServiceImpl implements DeviceService {
             boolean wasDrowning = lastDrowning.getOrDefault(deviceId, false);
 
             if (nowDrowning && !wasDrowning) {
-                alarmRecordMapper.insert(deviceId, "Drowning", "HANDLED");
+                alarmRecordMapper.insert(deviceId, "Drowning", "PENDING");
             }
             lastDrowning.put(deviceId, nowDrowning);
 
@@ -71,10 +70,8 @@ public class DeviceServiceImpl implements DeviceService {
             // ============ 2. 实时状态推送（WebSocket） ============
             messagingTemplate.convertAndSend("/topic/frames/" + deviceId, status);
 
-            // ============ 2b. 报警锁存 + WebSocket 弹窗 ============
+            // ============ 2b. WebSocket 弹窗 ============
             if (alarm != null && alarm > 0) {
-                lastAlarmTime.put(deviceId, System.currentTimeMillis());
-
                 Map<String, Object> alarmPopup = new HashMap<>();
                 alarmPopup.put("type", "drowningAlarm");
                 alarmPopup.put("deviceId", deviceId);
@@ -136,9 +133,8 @@ public class DeviceServiceImpl implements DeviceService {
         if (lastCall != null && System.currentTimeMillis() - lastCall < 30000) {
             status.setCallForHelp(1);
         }
-        // 报警锁存：最近15秒内有过报警，就持续返回1（心跳5秒一次，3倍余量）
-        Long lastAlarm = lastAlarmTime.get(deviceId);
-        if (lastAlarm != null && System.currentTimeMillis() - lastAlarm < 15000) {
+        // 报警锁存：数据库中有未确认的溺水报警 → 持续返回 alarm=1
+        if (alarmRecordMapper.countPending(deviceId) > 0) {
             status.setAlarm(1);
         }
         return status;
