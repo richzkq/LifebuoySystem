@@ -1,6 +1,7 @@
 package com.lifebuoysystem.service.impl;
 
 import com.lifebuoysystem.config.ServoProperties;
+import com.lifebuoysystem.mapper.AlarmRecordMapper;
 import com.lifebuoysystem.service.ServoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,14 +34,20 @@ public class ServoServiceImpl implements ServoService {
     private final MqttClient mqttPublisher;
     private final ServoProperties servoProperties;
     private final SimpMessagingTemplate messagingTemplate;
+    private final AlarmRecordMapper alarmRecordMapper;
 
     // ============ 状态缓存 ============
-    /** 每个设备的连续溺水帧计数 */
+    /** 每个设备的连续溺水帧计数（不再使用 threshold，保留用于调试） */
     private final Map<String, Integer> consecutiveCounts = new ConcurrentHashMap<>();
-    /** 每个设备上次舵机触发时间戳 (ms) */
+    /** 每个设备上次舵机推送时间戳 (ms) */
     private final Map<String, Long> lastTriggerTime = new ConcurrentHashMap<>();
     /** 每个设备舵机是否已释放 */
     private final Map<String, Boolean> servoReleased = new ConcurrentHashMap<>();
+    /** 每个设备是否处于活跃溺水推送状态 */
+    private final Map<String, Boolean> pushActive = new ConcurrentHashMap<>();
+
+    /** 溺水期间推送间隔（毫秒） */
+    private static final long PUSH_INTERVAL_MS = 3000;
 
     // ==================== 核心算法 ====================
 
@@ -48,39 +55,42 @@ public class ServoServiceImpl implements ServoService {
     public void onFrameProcessed(String deviceId, Integer drowningCount, Integer alarm) {
         if (deviceId == null || drowningCount == null) return;
 
-        // 综合报警为 0（pressure=1 或显式解除）→ 强制复位
-        if (alarm != null && alarm == 0) {
-            Integer prev = consecutiveCounts.put(deviceId, 0);
-            if (prev != null && prev > 0) {
-                log.info("设备 {} 报警解除 (alarm=0)，舵机计数复位 (之前连续 {} 帧)", deviceId, prev);
-            }
-            return;
-        }
+        long now = System.currentTimeMillis();
+        boolean hasPending = alarmRecordMapper.countPending(deviceId) > 0;
+
+        log.info("[舵机] device={} drowning={} alarm={} pending={} pushActive={}",
+                 deviceId, drowningCount, alarm, hasPending, pushActive.getOrDefault(deviceId, false));
 
         if (drowningCount > 0) {
-            // 原子递增连续计数
-            int count = consecutiveCounts.merge(deviceId, 1, Integer::sum);
-            log.debug("设备 {} 连续溺水帧: {}/{}",
-                    deviceId, count, servoProperties.getConsecutiveThreshold());
+            // 溺水帧：启动或维持推送
+            boolean wasActive = pushActive.getOrDefault(deviceId, false);
+            pushActive.put(deviceId, true);
 
-            if (count >= servoProperties.getConsecutiveThreshold()) {
-                long now = System.currentTimeMillis();
-                long lastTime = lastTriggerTime.getOrDefault(deviceId, 0L);
+            long lastPush = lastTriggerTime.getOrDefault(deviceId, 0L);
+            long elapsed = now - lastPush;
 
-                if (now - lastTime >= servoProperties.getCooldownMs()) {
-                    fireServo(deviceId, "CONSECUTIVE_DROWNING");
-                    consecutiveCounts.put(deviceId, 0);
-                    lastTriggerTime.put(deviceId, now);
-                } else {
-                    log.debug("设备 {} 舵机冷却中，跳过触发 (距上次 {}ms)",
-                            deviceId, now - lastTime);
-                }
+            if (!wasActive) {
+                // 首次溺水 → 立即推送
+                fireServo(deviceId, "CONSECUTIVE_DROWNING");
+                lastTriggerTime.put(deviceId, now);
+                consecutiveCounts.put(deviceId, 1);
+                log.warn("[舵机推送 #1] device={} 首次触发", deviceId);
+            } else if (elapsed >= PUSH_INTERVAL_MS) {
+                // 持续溺水 → 每隔 PUSH_INTERVAL_MS 推送一次
+                int sent = consecutiveCounts.merge(deviceId, 1, Integer::sum);
+                fireServo(deviceId, "CONSECUTIVE_DROWNING");
+                lastTriggerTime.put(deviceId, now);
+                log.warn("[舵机推送 #{}] device={} 持续推送, 距上次 {}ms", sent, deviceId, elapsed);
+            } else {
+                log.info("[舵机跳过] device={} 距上次推送仅 {}ms, 等待中", deviceId, elapsed);
             }
         } else {
-            // 溺水中断 → 计数归零
-            Integer prev = consecutiveCounts.put(deviceId, 0);
-            if (prev != null && prev > 0) {
-                log.debug("设备 {} 溺水序列中断 (连续 {} 帧后归零)", deviceId, prev);
+            // drowningCount == 0：模型无溺水，但可能心跳覆盖
+            if (!hasPending && pushActive.getOrDefault(deviceId, false)) {
+                // DB 无待确认报警 + 之前活跃 → 真正结束
+                pushActive.put(deviceId, false);
+                consecutiveCounts.put(deviceId, 0);
+                log.info("[舵机停止] device={} 报警已确认或自然结束，停止推送", deviceId);
             }
         }
     }
