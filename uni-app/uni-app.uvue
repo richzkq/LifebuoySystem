@@ -166,6 +166,73 @@ const enterMonitor = () => {
   refreshSnapshot()
 }
 
+// ==================== 安卓后台通知 ====================
+let notifChannelCreated = false
+
+const sendNotification = (title, message) => {
+  // #ifdef APP-PLUS
+  if (typeof plus === 'undefined' || !plus.android) return
+
+  try {
+    const Context    = plus.android.importClass('android.content.Context')
+    const NManager   = plus.android.importClass('android.app.NotificationManager')
+    const NChannel   = plus.android.importClass('android.app.NotificationChannel')
+    const NBuilder   = plus.android.importClass('android.app.Notification$Builder')
+    const NCompat    = plus.android.importClass('androidx.core.app.NotificationCompat$Builder')
+    const Intent     = plus.android.importClass('android.content.Intent')
+    const PendingIntent = plus.android.importClass('android.app.PendingIntent')
+    const main       = plus.android.runtimeMainActivity()
+
+    const CHANNEL_ID = 'lifebuoy_alarm'
+
+    // 创建通知渠道（仅一次）
+    if (!notifChannelCreated) {
+      const channel = plus.android.newObject(
+        'android.app.NotificationChannel',
+        CHANNEL_ID, '溺水报警', NManager.IMPORTANCE_HIGH)
+      channel.setDescription('智能救生圈溺水报警通知')
+      const nm = main.getSystemService(Context.NOTIFICATION_SERVICE)
+      plus.android.invoke(nm, 'createNotificationChannel', channel)
+      notifChannelCreated = true
+    }
+
+    // 点击通知打开 App
+    const intent = plus.android.newObject('android.content.Intent', Context, main.getClass())
+    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+    const pending = plus.android.invoke(PendingIntent, 'getActivity', main, 0, intent,
+      plus.android.invoke(PendingIntent, 'FLAG_UPDATE_CURRENT'))
+
+    // 构建通知
+    const builder = plus.android.newObject(
+      'androidx.core.app.NotificationCompat$Builder', main, CHANNEL_ID)
+    plus.android.invoke(builder, 'setSmallIcon',
+      plus.android.getAttribute(main, 'getApplicationInfo').icon)  // 使用 App 图标
+    plus.android.invoke(builder, 'setContentTitle', title)
+    plus.android.invoke(builder, 'setContentText', message)
+    plus.android.invoke(builder, 'setAutoCancel', true)
+    plus.android.invoke(builder, 'setContentIntent', pending)
+    plus.android.invoke(builder, 'setPriority',
+      plus.android.getAttribute(NCompat, 'PRIORITY_HIGH'))
+    plus.android.invoke(builder, 'setDefaults', -1)  // 声音 + 震动 + 灯
+
+    const notification = plus.android.invoke(builder, 'build')
+    const nm = main.getSystemService(Context.NOTIFICATION_SERVICE)
+    plus.android.invoke(nm, 'notify', 1001, notification)
+
+  } catch(e) {
+    // 降级：直接震动
+    try {
+      const Vibrator = plus.android.importClass('android.os.Vibrator')
+      const main2 = plus.android.runtimeMainActivity()
+      const v = main2.getSystemService(plus.android.importClass('android.content.Context').VIBRATOR_SERVICE)
+      if (v.hasVibrator()) {
+        plus.android.invoke(v, 'vibrate', [0, 300, 200, 300])
+      }
+    } catch(e2) {}
+  }
+  // #endif
+}
+
 // ==================== 语音播报 ====================
 const speak = (text) => {
   if (!voiceEnabled.value) return
@@ -262,13 +329,19 @@ const fetchLiveStatus = () => {
 
         const visionNow = isAlarm.value === 1 && pressureStatus.value !== 1
         if (visionNow && !wasAlarm) {
-          speak(deviceId.value + '，溺水报警！检测到疑似溺水者，请立即处理！')
+          const msg = deviceId.value + '，溺水报警！检测到疑似溺水者，请立即处理！'
+          speak(msg)
+          sendNotification('🛟 溺水报警！', msg)
         }
         if (pressureStatus.value === 1 && wasAlarm) {
-          speak(deviceId.value + '，人员已获救，警报解除')
+          const msg = deviceId.value + '，人员已获救，警报解除'
+          speak(msg)
+          sendNotification('✅ 人员已获救', msg)
         }
         if (heardCallCount.value > 0 && !wasCallHelp) {
-          speak(deviceId.value + '，侦测到呼救信号，请立即处理！')
+          const msg = deviceId.value + '，侦测到呼救信号，请立即处理！'
+          speak(msg)
+          sendNotification('🔊 呼救声检测', msg)
         }
 
         wasAlarm    = visionNow

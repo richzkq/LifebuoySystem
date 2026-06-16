@@ -30,6 +30,8 @@ const int BUTTON_PIN = D7;    // 复位按钮
 const int SERVO_LOCK_ANGLE = 90;
 const int SERVO_RELEASE_ANGLE = 180;
 
+// 释放后保持时间（毫秒），之后自动复位
+const unsigned long SERVO_HOLD_MS = 2000;
 const unsigned long DEBOUNCE_MS = 50;
 
 // =====================================================
@@ -43,6 +45,7 @@ PubSubClient mqttClient(espClient);
 // 5. 状态变量
 // =====================================================
 bool hasReleased = false;
+unsigned long servoReleaseTime = 0;
 
 // 按钮消抖
 int lastButtonReading = HIGH;

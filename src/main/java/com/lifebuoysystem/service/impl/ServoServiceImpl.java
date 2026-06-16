@@ -108,13 +108,20 @@ public class ServoServiceImpl implements ServoService {
 
     private void publishMqttCommand(String deviceId, String reason) {
         try {
+            // 确保连接存活再发布
+            if (!mqttPublisher.isConnected()) {
+                log.warn("MQTT 断开，尝试重连...");
+                mqttPublisher.reconnect();
+                log.info("MQTT 重连结果: {}", mqttPublisher.isConnected() ? "成功" : "失败");
+            }
+
             String topic = servoProperties.getCommandTopic(deviceId);
             String payload = String.format(
                     "{\"cmd\":\"RELEASE\",\"deviceId\":\"%s\",\"reason\":\"%s\",\"ts\":%d}",
                     deviceId, reason, System.currentTimeMillis()
             );
             MqttMessage msg = new MqttMessage(payload.getBytes(StandardCharsets.UTF_8));
-            msg.setQos(1);      // 至少一次送达
+            msg.setQos(1);
             msg.setRetained(false);
             mqttPublisher.publish(topic, msg);
             log.info("MQTT 已发布 → {} : {}", topic, payload);
