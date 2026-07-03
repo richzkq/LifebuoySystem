@@ -68,7 +68,7 @@
         <view class="device-info">
           <text class="info-line">📡 终端: {{ deviceId }}</text>
           <text class="info-line" v-if="temperature">🌡 温度: {{ temperature }}°C</text>
-          <text class="info-line info-server">🔒 47.83.199.93</text>
+          <text class="info-line info-server">🔒 47.243.236.87</text>
         </view>
       </view>
 
@@ -134,8 +134,8 @@ const systemMessage   = ref('初始化连接中...')
 const callAlarmActive = ref(false)
 const voiceEnabled    = ref(true)
 
-const API_URL  = 'http://47.83.199.93:8080/device/latest'
-const SNAP_URL = 'http://47.83.199.93:8080/device/snapshot'
+const API_URL  = 'http://47.243.236.87:8080/device/latest'
+const SNAP_URL = 'http://47.243.236.87:8080/device/snapshot'
 
 const snapshotUrl = ref('')
 
