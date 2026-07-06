@@ -1,0 +1,17 @@
+[Unit]
+Description=Lifebuoy Push Device - AI数据上传
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+ExecStart=/usr/bin/python3 /root/push_device.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/push_device.log
+StandardError=append:/var/log/push_device.log
+
+[Install]
+WantedBy=multi-user.target

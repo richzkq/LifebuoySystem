@@ -1,0 +1,17 @@
+[Unit]
+Description=Lifebuoy Image Pusher - WebSocket 视频推流
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+ExecStart=/usr/bin/python3 /root/image_pusher.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/image_pusher.log
+StandardError=append:/var/log/image_pusher.log
+
+[Install]
+WantedBy=multi-user.target
