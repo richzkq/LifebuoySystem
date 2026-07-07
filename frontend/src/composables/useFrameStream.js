@@ -39,8 +39,11 @@ export function useFrameStream(deviceId) {
         if (bmp) bmp.close()
         bmp = pending
         pending = null
-        canvas.width = bmp.width
-        canvas.height = bmp.height
+        // 只在尺寸变化时重建画布，避免每帧清空底层缓冲区
+        if (canvas.width !== bmp.width || canvas.height !== bmp.height) {
+          canvas.width = bmp.width
+          canvas.height = bmp.height
+        }
       }
 
       if (bmp) ctx.drawImage(bmp, 0, 0)
