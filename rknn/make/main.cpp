@@ -50,10 +50,6 @@ static int get_drowning_confirm_count()
     return g_drowning_history_sum;
 }
 
-// 根据温度控制模型运行频率。
-// 返回值：
-//   -1 表示进入保护，跳过模型并直接 sleep；
-//    1 表示每帧跑模型；2/3/5 表示每隔对应帧数跑一次模型。
 static int get_thermal_infer_interval(float temp, const char **state, int *sleep_ms)
 {
     *sleep_ms = 0;
