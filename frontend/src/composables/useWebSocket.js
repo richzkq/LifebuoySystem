@@ -63,6 +63,29 @@ export function useWebSocket(deviceId) {
         stompClient.subscribe(WS_TOPIC.ALARM, (msg) => {
           try {
             const alarmData = JSON.parse(msg.body)
+            if (alarmData.type === 'drowningAlarm') {
+              ElMessage.error({
+                dangerouslyUseHTMLString: true,
+                message: `
+                  <div class="glass-alarm-box">
+                    <div class="glass-alarm-header">
+                      <span class="glass-alarm-dot"></span>
+                      <span class="glass-alarm-title">🛟 溺水报警</span>
+                    </div>
+                    <div class="glass-alarm-content">
+                      ${alarmData.deviceId || ''} — ${alarmData.message || '检测到溺水!'}
+                    </div>
+                    <div class="glass-alarm-time">
+                      ${new Date().toLocaleTimeString()}
+                    </div>
+                  </div>
+                `,
+                duration: 0,
+                showClose: true,
+                customClass: 'glass-alarm-message',
+              })
+            }
+
             if (alarmData.type === 'callForHelp') {
               ElMessage.error({
                 dangerouslyUseHTMLString: true,
@@ -83,6 +106,14 @@ export function useWebSocket(deviceId) {
                 duration: 0,
                 showClose: true,
                 customClass: 'glass-alarm-message',
+              })
+            }
+
+            if (alarmData.type === 'servoTrigger') {
+              ElMessage.warning({
+                message: `🛟 ${alarmData.message || '救生圈已释放!'}`,
+                duration: 5000,
+                showClose: true,
               })
             }
           } catch (e) {
