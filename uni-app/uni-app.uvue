@@ -68,7 +68,7 @@
         <view class="device-info">
           <text class="info-line">📡 终端: {{ deviceId }}</text>
           <text class="info-line" v-if="temperature">🌡 温度: {{ temperature }}°C</text>
-          <text class="info-line info-server">🔒 10.184.201.174</text>
+          <text class="info-line info-server">🔒 8.217.92.196</text>
         </view>
       </view>
 
@@ -134,8 +134,8 @@ const systemMessage   = ref('初始化连接中...')
 const callAlarmActive = ref(false)
 const voiceEnabled    = ref(true)
 
-const API_URL  = 'http://10.184.201.174:8080/device/latest'
-const SNAP_URL = 'http://10.184.201.174:8080/device/snapshot'
+const API_URL  = 'http://8.217.92.196:8080/device/latest'
+const SNAP_URL = 'http://8.217.92.196:8080/device/snapshot'
 
 const snapshotUrl = ref('')
 
@@ -168,6 +168,26 @@ const enterMonitor = () => {
 
 // ==================== 安卓后台通知 ====================
 let notifChannelCreated = false
+let permRequested = false
+
+const requestNotifyPermission = () => {
+  if (permRequested) return
+  permRequested = true
+  try {
+    const Build = plus.android.importClass('android.os.Build')
+    const VERSION = plus.android.getAttribute(Build, 'VERSION$SDK_INT')
+    if (VERSION >= 33) {
+      const main = plus.android.runtimeMainActivity()
+      const perm = 'android.permission.POST_NOTIFICATIONS'
+      const ctx = plus.android.importClass('android.content.Context')
+      const checker = plus.android.invoke(main, 'checkSelfPermission', perm)
+      const PERMISSION_GRANTED = 0
+      if (checker !== PERMISSION_GRANTED) {
+        plus.android.invoke(main, 'requestPermissions', [perm], 1001)
+      }
+    }
+  } catch(e) {}
+}
 
 const sendNotification = (title, message) => {
   // #ifdef APP-PLUS
@@ -176,9 +196,6 @@ const sendNotification = (title, message) => {
   try {
     const Context    = plus.android.importClass('android.content.Context')
     const NManager   = plus.android.importClass('android.app.NotificationManager')
-    const NChannel   = plus.android.importClass('android.app.NotificationChannel')
-    const NBuilder   = plus.android.importClass('android.app.Notification$Builder')
-    const NCompat    = plus.android.importClass('androidx.core.app.NotificationCompat$Builder')
     const Intent     = plus.android.importClass('android.content.Intent')
     const PendingIntent = plus.android.importClass('android.app.PendingIntent')
     const main       = plus.android.runtimeMainActivity()
@@ -189,8 +206,12 @@ const sendNotification = (title, message) => {
     if (!notifChannelCreated) {
       const channel = plus.android.newObject(
         'android.app.NotificationChannel',
-        CHANNEL_ID, '溺水报警', NManager.IMPORTANCE_HIGH)
-      channel.setDescription('智能救生圈溺水报警通知')
+        CHANNEL_ID, '溺水报警', 4)  // IMPORTANCE_HIGH = 4
+      plus.android.invoke(channel, 'setDescription', '智能救生圈溺水报警通知')
+      try {
+        plus.android.invoke(channel, 'enableVibration', true)
+        plus.android.invoke(channel, 'setVibrationPattern', [0, 300, 200, 300])
+      } catch(ee) {}
       const nm = main.getSystemService(Context.NOTIFICATION_SERVICE)
       plus.android.invoke(nm, 'createNotificationChannel', channel)
       notifChannelCreated = true
@@ -198,34 +219,40 @@ const sendNotification = (title, message) => {
 
     // 点击通知打开 App
     const intent = plus.android.newObject('android.content.Intent', Context, main.getClass())
-    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-    const pending = plus.android.invoke(PendingIntent, 'getActivity', main, 0, intent,
-      plus.android.invoke(PendingIntent, 'FLAG_UPDATE_CURRENT'))
+    intent.setFlags(0x10000000 | 0x00200000)  // FLAG_NEW_TASK | FLAG_RESET_TASK
+    const pending = plus.android.invoke(PendingIntent, 'getActivity', main, 0, intent, 0x08000000)
 
-    // 构建通知
+    // 构建通知 — 用系统内置图标避免 SmallIcon 失败
     const builder = plus.android.newObject(
-      'androidx.core.app.NotificationCompat$Builder', main, CHANNEL_ID)
-    plus.android.invoke(builder, 'setSmallIcon',
-      plus.android.getAttribute(main, 'getApplicationInfo').icon)  // 使用 App 图标
+      'android.app.Notification$Builder', main, CHANNEL_ID)
+    // 使用 Android 系统内置通知图标: android.R.drawable.ic_dialog_alert = 0x1080027
+    plus.android.invoke(builder, 'setSmallIcon', 0x1080027)
     plus.android.invoke(builder, 'setContentTitle', title)
     plus.android.invoke(builder, 'setContentText', message)
     plus.android.invoke(builder, 'setAutoCancel', true)
     plus.android.invoke(builder, 'setContentIntent', pending)
-    plus.android.invoke(builder, 'setPriority',
-      plus.android.getAttribute(NCompat, 'PRIORITY_HIGH'))
-    plus.android.invoke(builder, 'setDefaults', -1)  // 声音 + 震动 + 灯
+    plus.android.invoke(builder, 'setDefaults', -1)  // 声音+震动+灯
 
     const notification = plus.android.invoke(builder, 'build')
     const nm = main.getSystemService(Context.NOTIFICATION_SERVICE)
     plus.android.invoke(nm, 'notify', 1001, notification)
 
+    // 也同时震动
+    try {
+      const Vibrator = plus.android.importClass('android.os.Vibrator')
+      const v = main.getSystemService(plus.android.importClass('android.content.Context').VIBRATOR_SERVICE)
+      if (plus.android.invoke(v, 'hasVibrator')) {
+        plus.android.invoke(v, 'vibrate', [0, 300, 200, 300])
+      }
+    } catch(e2) {}
+
   } catch(e) {
-    // 降级：直接震动
+    // 通知失败，至少震动一下
     try {
       const Vibrator = plus.android.importClass('android.os.Vibrator')
       const main2 = plus.android.runtimeMainActivity()
       const v = main2.getSystemService(plus.android.importClass('android.content.Context').VIBRATOR_SERVICE)
-      if (v.hasVibrator()) {
+      if (plus.android.invoke(v, 'hasVibrator')) {
         plus.android.invoke(v, 'vibrate', [0, 300, 200, 300])
       }
     } catch(e2) {}
@@ -366,6 +393,7 @@ function refreshSnapshot() {
 }
 
 onMounted(() => {
+  requestNotifyPermission()
   fetchLiveStatus()
   timer = setInterval(fetchLiveStatus, 400)
 })

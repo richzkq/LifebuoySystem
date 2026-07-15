@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Smart Lifebuoy System (智能救生圈系统) — an IoT drowning detection and rescue monitoring platform. An RK3588 edge device runs AI models (RKNN) to detect drowning persons in real-time video, pushes detection results and video frames to a Spring Boot server on Alibaba Cloud (10.184.201.174), which streams them to a Vue 3 web dashboard and a uni-app mobile client.
+Smart Lifebuoy System (智能救生圈系统) — an IoT drowning detection and rescue monitoring platform. An RK3588 edge device runs AI models (RKNN) to detect drowning persons in real-time video, pushes detection results and video frames to a Spring Boot server on Alibaba Cloud (8.217.92.196), which streams them to a Vue 3 web dashboard and a uni-app mobile client.
 
 The system also controls a servo motor via MQTT: when consecutive drowning frames are detected, the server pushes a release command to an ESP8266 board that activates the lifebuoy.
 
@@ -33,7 +33,7 @@ systemctl restart lifebuoy
 ```bash
 cd frontend
 npm install
-npm run dev       # Dev server at localhost:5173, proxies to 10.184.201.174:8080
+npm run dev       # Dev server at localhost:5173, proxies to 8.217.92.196:8080
 npm run build     # Production build → dist/
 
 # Deploy to production (Alibaba Cloud, Nginx serves /var/www/lifebuoy/)
@@ -177,7 +177,7 @@ Auth header name: `token` (not `Authorization`).
 | File | Purpose |
 |------|---------|
 | `application.yml` | Server port, MySQL, MQTT broker, servo thresholds |
-| `frontend/.env.development` | `VITE_API_BASE_URL=http://10.184.201.174:8080` |
+| `frontend/.env.development` | `VITE_API_BASE_URL=http://8.217.92.196:8080` |
 | `frontend/.env.production` | `VITE_API_BASE_URL=` (empty — Nginx proxies all routes) |
 | `frontend/vite.config.js` | Dev proxy: `/api`, `/user`, `/device`, `/ws`, `/uploads` → backend |
 | `RK3588/IPconfig.json` | `server_ip`, `server_port`, `upload_path`, `device_id` |
