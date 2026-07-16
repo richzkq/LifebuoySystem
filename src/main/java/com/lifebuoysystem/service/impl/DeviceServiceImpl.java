@@ -85,10 +85,10 @@ public class DeviceServiceImpl implements DeviceService {
             // ============ 2. 实时状态推送（WebSocket） ============
             messagingTemplate.convertAndSend("/topic/frames/" + deviceId, status);
 
-            // ============ 2b. WebSocket 弹窗（边沿检测，避免刷屏） ============
-            boolean nowAlarm = alarm != null && alarm > 0;
-            boolean wasAlarmPushed = alarmPopupSent.getOrDefault(deviceId, false);
-            if (nowAlarm && !wasAlarmPushed) {
+            // ============ 2b. 溺水弹窗（仅溺水触发，呼救不走这里） ============
+            boolean nowDrowning = drowningCount != null && drowningCount > 0;
+            boolean wasDrowningPushed = alarmPopupSent.getOrDefault(deviceId, false);
+            if (nowDrowning && !wasDrowningPushed) {
                 Map<String, Object> alarmPopup = new HashMap<>();
                 alarmPopup.put("type", "drowningAlarm");
                 alarmPopup.put("deviceId", deviceId);
@@ -97,8 +97,8 @@ public class DeviceServiceImpl implements DeviceService {
                 messagingTemplate.convertAndSend("/topic/alarm", alarmPopup);
                 alarmPopupSent.put(deviceId, true);
             }
-            if (!nowAlarm) {
-                alarmPopupSent.put(deviceId, false);  // alarm=0 时复位，允许下次再弹
+            if (!nowDrowning) {
+                alarmPopupSent.put(deviceId, false);
             }
 
             // ============ 3. 呼救声弹窗（只推不写库） ============

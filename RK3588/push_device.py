@@ -60,6 +60,8 @@ RE_DROWNING_COUNT = re.compile(r"Drowning=(\d+)")
 RE_PERSON_COUNT   = re.compile(r"Person out of water=(\d+)")
 RE_CALL           = re.compile(r"CallforHelp\s*=\s*(\d+)")
 RE_PRESSURE       = re.compile(r"Pressure\s*=\s*(\d+)")
+RE_UART_CALL      = re.compile(r"\[UART RX STM32\]\s*ascii\s*01\s*CallForHelp")
+RE_UART_PRESSURE  = re.compile(r"\[UART RX STM32\]\s*ascii\s*02\s*Pressure")
 RE_TARGET         = re.compile(r"Drowning:\s*conf=([\d.]+)\s*center=\((\d+),(\d+)\)")
 
 # =========================================================
@@ -106,34 +108,18 @@ last_pressure      = 0      # 上一帧压力
 last_temp_upload   = 0      # 上次温度心跳上传时间戳
 
 def upload_decision(frame_data):
-    """每帧解析完成时调用。溺水直接上传 alarm=1，防重复由服务端 countPending 负责"""
-    global last_call_for_help, last_pressure
+    """每帧解析完成时调用，仅处理溺水报警。呼救/压力走 UART 独立通道"""
 
-    # ──── 1. 呼救声：状态变化即上传 ────
-    call = frame_data["callForHelp"]
-    if call != last_call_for_help:
-        frame_data["alarm"] = compute_alarm(frame_data)
-        do_upload(frame_data)
-        last_call_for_help = call
-
-    # ──── 2. 压力传感器：状态变化即上传 ────
-    pres = frame_data["pressure"]
-    if pres != last_pressure:
-        frame_data["alarm"] = compute_alarm(frame_data)
-        do_upload(frame_data)
-        last_pressure = pres
-
-    # ──── 3. 溺水报警：模型输出 Drowning>0 就上传 ────
     drowning = frame_data["drowningCount"]
     if drowning > 0:
-        frame_data["alarm"] = compute_alarm(frame_data)  # 如果 pressure=1 则 alarm=0
+        frame_data["alarm"] = compute_alarm(frame_data)
         do_upload(frame_data)
 
 # =========================================================
 # 启动模型
 # =========================================================
 process = subprocess.Popen(
-    [MODEL_EXEC, DROWNING_MODEL, PERSON_MODEL],
+    ['stdbuf', '-oL', MODEL_EXEC, DROWNING_MODEL, PERSON_MODEL],
     stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     text=True, encoding="utf-8", errors="ignore",
     bufsize=1, cwd=ROOT_DIR,
@@ -162,6 +148,23 @@ try:
 
         line = line.strip()
 
+        # ── UART 传感器（最高优先级，独立于帧） ──
+        if RE_UART_CALL.search(line) and last_call_for_help == 0:
+            last_call_for_help = 1
+            uart_c = {"frameNo":0,"drowningCount":0,"personOutOfWater":0,
+                      "callForHelp":1,"pressure":0,"alarm":1,
+                      "temperature":global_temp,"targets":[]}
+            do_upload(uart_c)
+            continue
+
+        if RE_UART_PRESSURE.search(line) and last_pressure == 0:
+            last_pressure = 1
+            uart_p = {"frameNo":0,"drowningCount":0,"personOutOfWater":0,
+                      "callForHelp":0,"pressure":1,"alarm":0,
+                      "temperature":global_temp,"targets":[]}
+            do_upload(uart_p)
+            continue
+
         # ── 帧间温度：[TEMP] 33.3°C state=NORMAL ──
         m = RE_TEMP_LINE.search(line)
         if m:
@@ -180,6 +183,9 @@ try:
                 }
                 do_upload(temp_only)
                 last_temp_upload = now
+                # 心跳更新服务器状态，同步复位本地全局标志
+                last_call_for_help = 0
+                last_pressure = 0
             continue
 
         # ── 新帧标记 ──
