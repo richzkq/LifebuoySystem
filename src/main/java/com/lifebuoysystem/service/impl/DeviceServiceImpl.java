@@ -86,7 +86,6 @@ public class DeviceServiceImpl implements DeviceService {
             messagingTemplate.convertAndSend("/topic/frames/" + deviceId, status);
 
             // ============ 2b. 溺水弹窗（仅溺水触发，呼救不走这里） ============
-            boolean nowDrowning = drowningCount != null && drowningCount > 0;
             boolean wasDrowningPushed = alarmPopupSent.getOrDefault(deviceId, false);
             if (nowDrowning && !wasDrowningPushed) {
                 Map<String, Object> alarmPopup = new HashMap<>();
