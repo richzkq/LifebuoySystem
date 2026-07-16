@@ -126,7 +126,7 @@ def upload_decision(frame_data):
     # ──── 3. 溺水报警：模型输出 Drowning>0 就上传 ────
     drowning = frame_data["drowningCount"]
     if drowning > 0:
-        frame_data["alarm"] = 1
+        frame_data["alarm"] = compute_alarm(frame_data)  # 如果 pressure=1 则 alarm=0
         do_upload(frame_data)
 
 # =========================================================

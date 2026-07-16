@@ -33,6 +33,7 @@ public class DeviceServiceImpl implements DeviceService {
     private final Map<String, Boolean> lastDrowning = new ConcurrentHashMap<>();
     private final Map<String, Integer> lastPressure = new ConcurrentHashMap<>();
     private final Map<String, Long> lastCallForHelpTime = new ConcurrentHashMap<>();
+    private final Map<String, Boolean> alarmPopupSent = new ConcurrentHashMap<>();  // 弹窗去重
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -84,14 +85,20 @@ public class DeviceServiceImpl implements DeviceService {
             // ============ 2. 实时状态推送（WebSocket） ============
             messagingTemplate.convertAndSend("/topic/frames/" + deviceId, status);
 
-            // ============ 2b. WebSocket 弹窗 ============
-            if (alarm != null && alarm > 0) {
+            // ============ 2b. WebSocket 弹窗（边沿检测，避免刷屏） ============
+            boolean nowAlarm = alarm != null && alarm > 0;
+            boolean wasAlarmPushed = alarmPopupSent.getOrDefault(deviceId, false);
+            if (nowAlarm && !wasAlarmPushed) {
                 Map<String, Object> alarmPopup = new HashMap<>();
                 alarmPopup.put("type", "drowningAlarm");
                 alarmPopup.put("deviceId", deviceId);
                 alarmPopup.put("timestamp", System.currentTimeMillis());
                 alarmPopup.put("message", "检测到溺水报警!");
                 messagingTemplate.convertAndSend("/topic/alarm", alarmPopup);
+                alarmPopupSent.put(deviceId, true);
+            }
+            if (!nowAlarm) {
+                alarmPopupSent.put(deviceId, false);  // alarm=0 时复位，允许下次再弹
             }
 
             // ============ 3. 呼救声弹窗（只推不写库） ============
