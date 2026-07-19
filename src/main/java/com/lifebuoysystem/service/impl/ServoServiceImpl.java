@@ -45,6 +45,8 @@ public class ServoServiceImpl implements ServoService {
     private final Map<String, Boolean> servoReleased = new ConcurrentHashMap<>();
     /** 每个设备是否处于活跃溺水推送状态 */
     private final Map<String, Boolean> pushActive = new ConcurrentHashMap<>();
+    /** 每个设备舵机释放弹窗是否已推过（防重复） */
+    private final Map<String, Boolean> servoPopupSent = new ConcurrentHashMap<>();
 
     /** 溺水期间推送间隔（毫秒） */
     private static final long PUSH_INTERVAL_MS = 3000;
@@ -89,6 +91,7 @@ public class ServoServiceImpl implements ServoService {
             if (!hasPending && pushActive.getOrDefault(deviceId, false)) {
                 // DB 无待确认报警 + 之前活跃 → 真正结束
                 pushActive.put(deviceId, false);
+                servoPopupSent.put(deviceId, false);  // 复位弹窗标志，允许下次再弹
                 consecutiveCounts.put(deviceId, 0);
                 log.info("[舵机停止] device={} 报警已确认或自然结束，停止推送", deviceId);
             }
@@ -100,20 +103,23 @@ public class ServoServiceImpl implements ServoService {
     private void fireServo(String deviceId, String reason) {
         log.warn("🛟 触发舵机! deviceId={}, reason={}", deviceId, reason);
 
-        // 1. MQTT 推送给 ESP8266
+        // 1. MQTT 推送给 ESP8266（每次都需要）
         publishMqttCommand(deviceId, reason);
 
         // 2. 更新内存状态
         servoReleased.put(deviceId, true);
 
-        // 3. WebSocket 推送给前端监控页面
-        Map<String, Object> wsMsg = new LinkedHashMap<>();
-        wsMsg.put("type", "servoTrigger");
-        wsMsg.put("deviceId", deviceId);
-        wsMsg.put("reason", reason);
-        wsMsg.put("timestamp", System.currentTimeMillis());
-        wsMsg.put("message", "🛟 救生圈已释放!");
-        messagingTemplate.convertAndSend("/topic/alarm", wsMsg);
+        // 3. WebSocket 弹窗（仅首次触发，防重复刷屏）
+        if (!servoPopupSent.getOrDefault(deviceId, false)) {
+            servoPopupSent.put(deviceId, true);
+            Map<String, Object> wsMsg = new LinkedHashMap<>();
+            wsMsg.put("type", "servoTrigger");
+            wsMsg.put("deviceId", deviceId);
+            wsMsg.put("reason", reason);
+            wsMsg.put("timestamp", System.currentTimeMillis());
+            wsMsg.put("message", "🛟 救生圈已释放!");
+            messagingTemplate.convertAndSend("/topic/alarm", wsMsg);
+        }
     }
 
     private void publishMqttCommand(String deviceId, String reason) {
