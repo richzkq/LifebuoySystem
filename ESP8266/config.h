@@ -12,7 +12,7 @@ const char* password = "20061019";
 // =====================================================
 // 2. MQTT 服务器配置
 // =====================================================
-const char* mqttServer = "123.56.240.177";
+const char* mqttServer = "10.184.201.174";
 const int mqttPort = 1883;
 
 const char* deviceId = "rocket001";
