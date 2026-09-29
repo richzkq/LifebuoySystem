@@ -19,37 +19,37 @@ export default defineConfig({
     host: '0.0.0.0',
     proxy: {
       '/ws': {
-        target: 'ws://123.56.240.177:8080',
+        target: 'ws://123.57.44.154:8080',
         ws: true,
         changeOrigin: true,
       },
       '/ws-browser-frame': {
-        target: 'ws://123.56.240.177:8080',
+        target: 'ws://123.57.44.154:8080',
         ws: true,
         changeOrigin: true,
       },
       '/ws-frame': {
-        target: 'ws://123.56.240.177:8080',
+        target: 'ws://123.57.44.154:8080',
         ws: true,
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://123.56.240.177:8080',
+        target: 'http://123.57.44.154:8080',
         changeOrigin: true,
         secure: false,
       },
       '/api': {
-        target: 'http://123.56.240.177:8080',
+        target: 'http://123.57.44.154:8080',
         changeOrigin: true,
         secure: false,
       },
       '/user': {
-        target: 'http://123.56.240.177:8080',
+        target: 'http://123.57.44.154:8080',
         changeOrigin: true,
         secure: false,
       },
       '/device': {
-        target: 'http://123.56.240.177:8080',
+        target: 'http://123.57.44.154:8080',
         changeOrigin: true,
         secure: false,
       },
