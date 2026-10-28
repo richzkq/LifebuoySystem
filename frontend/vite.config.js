@@ -1,58 +1,58 @@
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
+import { resolve } from "path";
 
 export default defineConfig({
   plugins: [vue()],
 
   define: {
-    global: 'window',
+    global: "window",
   },
 
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      "@": resolve(__dirname, "src"),
     },
   },
 
   server: {
-    host: '0.0.0.0',
+    host: "0.0.0.0",
     proxy: {
-      '/ws': {
-        target: 'ws://123.57.44.154:8080',
+      "/ws": {
+        target: "ws://47.95.146.84:8080",
         ws: true,
         changeOrigin: true,
       },
-      '/ws-browser-frame': {
-        target: 'ws://123.57.44.154:8080',
+      "/ws-browser-frame": {
+        target: "ws://47.95.146.84:8080",
         ws: true,
         changeOrigin: true,
       },
-      '/ws-frame': {
-        target: 'ws://123.57.44.154:8080',
+      "/ws-frame": {
+        target: "ws://47.95.146.84:8080",
         ws: true,
         changeOrigin: true,
       },
-      '/uploads': {
-        target: 'http://123.57.44.154:8080',
+      "/uploads": {
+        target: "http://47.95.146.84:8080",
         changeOrigin: true,
         secure: false,
       },
-      '/api': {
-        target: 'http://123.57.44.154:8080',
+      "/api": {
+        target: "http://47.95.146.84:8080",
         changeOrigin: true,
         secure: false,
       },
-      '/user': {
-        target: 'http://123.57.44.154:8080',
+      "/user": {
+        target: "http://47.95.146.84:8080",
         changeOrigin: true,
         secure: false,
       },
-      '/device': {
-        target: 'http://123.57.44.154:8080',
+      "/device": {
+        target: "http://47.95.146.84:8080",
         changeOrigin: true,
         secure: false,
       },
     },
   },
-})
+});
