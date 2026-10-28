@@ -74,7 +74,8 @@ def read_and_pack(path):
             jpg = f.read()
         if len(jpg) < 500:
             return None
-        dev_bytes = DEVICE_ID.encode("utf-8")
+        dev_bytes = DEVICE_ID.encode("utf
+        -8")
         header = struct.pack(">I", len(dev_bytes))
         return header + dev_bytes + jpg
     except OSError:
