@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Smart Lifebuoy System (智能救生圈系统) — an IoT drowning detection and rescue monitoring platform. An RK3588 edge device runs AI models (RKNN) to detect drowning persons in real-time video, pushes detection results and video frames to a Spring Boot server on Alibaba Cloud (47.95.146.84), which streams them to a Vue 3 web dashboard and a uni-app mobile client.
+Smart Lifebuoy System (智能救生圈系统) — an IoT drowning detection and rescue monitoring platform. An RK3588 edge device runs AI models (RKNN) to detect drowning persons in real-time video, pushes detection results and video frames to a Spring Boot server on Alibaba Cloud (39.107.24.38), which streams them to a Vue 3 web dashboard and a uni-app mobile client.
 
 The system also controls a servo motor via MQTT: when consecutive drowning frames are detected, the server pushes a release command to an ESP8266 board that activates the lifebuoy.
 
@@ -33,7 +33,7 @@ systemctl restart lifebuoy
 ```bash
 cd frontend
 npm install
-npm run dev       # Dev server at localhost:5173, proxies to 47.95.146.84:8080
+npm run dev       # Dev server at localhost:5173, proxies to 39.107.24.38:8080
 npm run build     # Production build → dist/
 
 # Deploy to production (Alibaba Cloud, Nginx serves /var/www/lifebuoy/)
@@ -55,6 +55,7 @@ python3 image_pusher.py    # Frame monitoring → WebSocket /ws-frame
 ### Database
 
 MySQL 8.0, database name `lifebuoy`. Import the schema dump:
+
 ```bash
 mysql -u root -p lifebuoy < lifebuoySystem_full_20260528_174751.sql
 ```
@@ -91,18 +92,18 @@ Clients:
 
 ### Backend Package Structure (`src/main/java/com/lifebuoysystem/`)
 
-| Package | Purpose |
-|---------|---------|
-| `controller/` | Thin HTTP layer — delegates to services. `DeviceController`, `FrameController`, `userController`, `AlarmController`, `ServoController` |
-| `service/` | Business logic interfaces: `DeviceService`, `UserService`, `FrameService`, `AlarmService`, `ServoService` |
-| `service/impl/` | Implementations with `@Service` + `@RequiredArgsConstructor`. All business logic, caching, WebSocket/MQTT pushes live here |
-| `mapper/` | MyBatis annotation-based DAOs (`AlarmRecordMapper`, `userMapper`). No XML mappers |
-| `entity/` | POJOs: `DeviceStatus`, `TargetInfo`, `User`, `AlarmRecord` |
-| `config/` | `WebSocketConfig` (STOMP /ws + raw WebSocket /ws-frame), `webConfig` (CORS + JWT interceptor + static resources), `MqttBrokerConfig`, `MqttClientConfig`, `ServoProperties` |
-| `handler/` | `FrameWebSocketHandler` — receives Base64 frames from RK3588 image_pusher.py |
-| `interceptor/` | `jwtInterceptor` — validates `token` header. Whitelist managed by `webConfig.excludePathPatterns` only |
-| `utils/` | `jwtUtils` — static JWT create/verify (HMAC256, 7-day expiry) |
-| `common/` | `result<T>` — Generic API response wrapper (code, msg, data) |
+| Package         | Purpose                                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `controller/`   | Thin HTTP layer — delegates to services. `DeviceController`, `FrameController`, `userController`, `AlarmController`, `ServoController`                                      |
+| `service/`      | Business logic interfaces: `DeviceService`, `UserService`, `FrameService`, `AlarmService`, `ServoService`                                                                   |
+| `service/impl/` | Implementations with `@Service` + `@RequiredArgsConstructor`. All business logic, caching, WebSocket/MQTT pushes live here                                                  |
+| `mapper/`       | MyBatis annotation-based DAOs (`AlarmRecordMapper`, `userMapper`). No XML mappers                                                                                           |
+| `entity/`       | POJOs: `DeviceStatus`, `TargetInfo`, `User`, `AlarmRecord`                                                                                                                  |
+| `config/`       | `WebSocketConfig` (STOMP /ws + raw WebSocket /ws-frame), `webConfig` (CORS + JWT interceptor + static resources), `MqttBrokerConfig`, `MqttClientConfig`, `ServoProperties` |
+| `handler/`      | `FrameWebSocketHandler` — receives Base64 frames from RK3588 image_pusher.py                                                                                                |
+| `interceptor/`  | `jwtInterceptor` — validates `token` header. Whitelist managed by `webConfig.excludePathPatterns` only                                                                      |
+| `utils/`        | `jwtUtils` — static JWT create/verify (HMAC256, 7-day expiry)                                                                                                               |
+| `common/`       | `result<T>` — Generic API response wrapper (code, msg, data)                                                                                                                |
 
 ### Key Business Logic
 
@@ -137,14 +138,14 @@ When `pressure=1` (person rescued), `compute_alarm()` in `push_device.py` forces
 
 ### Frontend Structure (`frontend/src/`)
 
-| Directory | Purpose |
-|-----------|---------|
-| `api/` | Axios instance (`http.js`) + per-domain modules: `auth.js`, `alarm.js`, `device.js` |
-| `stores/` | Pinia: `auth.js` — token, user state, login/logout |
-| `composables/` | `useWebSocket.js` — STOMP connect/subscribe/disconnect lifecycle |
-| `config/` | Constants: API endpoints, WebSocket topics, default device, UI params |
-| `router/` | Vue Router with navigation guard (no token → /login) |
-| `views/` | `Login.vue` (glassmorphism), `DetectionView.vue` (MJPEG + stats + alarm list) |
+| Directory      | Purpose                                                                             |
+| -------------- | ----------------------------------------------------------------------------------- |
+| `api/`         | Axios instance (`http.js`) + per-domain modules: `auth.js`, `alarm.js`, `device.js` |
+| `stores/`      | Pinia: `auth.js` — token, user state, login/logout                                  |
+| `composables/` | `useWebSocket.js` — STOMP connect/subscribe/disconnect lifecycle                    |
+| `config/`      | Constants: API endpoints, WebSocket topics, default device, UI params               |
+| `router/`      | Vue Router with navigation guard (no token → /login)                                |
+| `views/`       | `Login.vue` (glassmorphism), `DetectionView.vue` (MJPEG + stats + alarm list)       |
 
 ### Routes & WebSocket Topics
 
@@ -174,13 +175,13 @@ Auth header name: `token` (not `Authorization`).
 
 ### Configuration Files
 
-| File | Purpose |
-|------|---------|
-| `application.yml` | Server port, MySQL, MQTT broker, servo thresholds |
-| `frontend/.env.development` | `VITE_API_BASE_URL=http://47.95.146.84:8080` |
-| `frontend/.env.production` | `VITE_API_BASE_URL=` (empty — Nginx proxies all routes) |
-| `frontend/vite.config.js` | Dev proxy: `/api`, `/user`, `/device`, `/ws`, `/uploads` → backend |
-| `RK3588/IPconfig.json` | `server_ip`, `server_port`, `upload_path`, `device_id` |
+| File                        | Purpose                                                            |
+| --------------------------- | ------------------------------------------------------------------ |
+| `application.yml`           | Server port, MySQL, MQTT broker, servo thresholds                  |
+| `frontend/.env.development` | `VITE_API_BASE_URL=http://39.107.24.38:8080`                       |
+| `frontend/.env.production`  | `VITE_API_BASE_URL=` (empty — Nginx proxies all routes)            |
+| `frontend/vite.config.js`   | Dev proxy: `/api`, `/user`, `/device`, `/ws`, `/uploads` → backend |
+| `RK3588/IPconfig.json`      | `server_ip`, `server_port`, `upload_path`, `device_id`             |
 
 ### Configuration Notes
 
